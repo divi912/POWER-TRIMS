@@ -26,5 +26,5 @@ Power Trims is a Minecraft plugin that imbues almost every armor trim in the gam
 
 ## License
 
-* GNU GPL V3.0📜
+* GPL-3.0 license📜
 
