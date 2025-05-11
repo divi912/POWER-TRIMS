@@ -1,0 +1,4 @@
+name: PowerTrims
+version: '1.0'
+main: MCplugin.powerTrims.PowerTrimss
+api-version: '1.21'

@@ -1,0 +1,326 @@
+package MCplugin.powerTrims.Trims;
+
+import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import org.bukkit.*;
+import org.bukkit.block.Block;
+import org.bukkit.entity.*;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.inventory.meta.trim.TrimPattern;
+import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.RayTraceResult;
+import org.bukkit.util.Vector;
+
+import java.util.*;
+
+
+public class WildTrim implements Listener {
+
+    private final JavaPlugin plugin;
+    private final TrimCooldownManager cooldownManager;
+
+    public WildTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+        this.plugin = plugin;
+        this.cooldownManager = cooldownManager;
+        WildPassive();
+    }
+
+    private void WildPassive() {
+        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                NamespacedKey effectKey = new NamespacedKey(plugin, "wild_trim_effect");
+
+                if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WILD)) {
+                    if (!player.hasPotionEffect(PotionEffectType.REGENERATION)) {
+                        player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, Integer.MAX_VALUE, 0, true, false, true));
+                        // Mark that the effect was given by the armor
+                        player.getPersistentDataContainer().set(effectKey, PersistentDataType.BYTE, (byte) 1);
+                    }
+                } else {
+                    // Only remove the effect if we previously applied it
+                    if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WILD)) {
+                        if (player.getPersistentDataContainer().has(effectKey, PersistentDataType.BYTE)) {
+                            player.removePotionEffect(PotionEffectType.REGENERATION);
+                            player.getPersistentDataContainer().remove(effectKey); // Clean up the marker
+                        }
+                    }
+                }
+            }
+        }, 0L, 20L);
+    }
+
+
+    public void WildPrimary(Player player) {
+        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WILD)) return;
+        if (cooldownManager.isOnCooldown(player, TrimPattern.WILD)) return;
+
+        Location start = player.getEyeLocation();
+        Vector direction = player.getLocation().getDirection().normalize();
+        double range = 60.0;
+
+        // Play sound effect for grappling hook
+        player.playSound(player.getLocation(), Sound.ENTITY_FISHING_BOBBER_THROW, 1.0f, 1.0f);
+
+        boolean abilityUsed = false;
+
+        // Use ray-tracing to find the exact entity in the crosshair
+        RayTraceResult entityHit = player.getWorld().rayTraceEntities(
+                start,
+                direction,
+                range,
+                entity -> entity instanceof LivingEntity && entity != player
+        );
+
+        if (entityHit != null && entityHit.getHitEntity() instanceof LivingEntity targetEntity) {
+            // Grapple to the entity under the crosshair
+            player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] Grappling to entity!");
+            visualizeGrapple(player, targetEntity.getLocation().add(0, 1, 0));
+            smoothlyPullPlayer(player, targetEntity.getLocation().add(0, 1, 0));
+            targetEntity.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 200, 1, true, false, true));
+            targetEntity.sendMessage(ChatColor.GREEN + "[§cWild§8] You have been Poisoned for 10 sec!");
+            abilityUsed = true;
+        } else {
+            // Grapple to the block under the crosshair if no entity is found
+            Block targetBlock = player.getTargetBlockExact((int) range);
+            if (targetBlock != null && !targetBlock.getType().isAir()) {
+                player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] Grappling to block!");
+                visualizeGrapple(player, targetBlock.getLocation().add(0.5, 1, 0.5));
+                smoothlyPullPlayer(player, targetBlock.getLocation().add(0.5, 1, 0.5));
+                abilityUsed = true;
+            } else {
+                // No valid target
+                player.sendMessage(ChatColor.RED + "§8[§cWild§8] No valid target found!");
+            }
+        }
+        Entity nearestEntity = null;
+
+        if (nearestEntity != null) {
+            // Grapple to the entity
+            player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] Grappling to entity!");
+            visualizeGrapple(player, nearestEntity.getLocation().add(0, 1, 0));
+            smoothlyPullPlayer(player, nearestEntity.getLocation().add(0, 1, 0));
+            abilityUsed = true;
+        } else {
+            // Grapple to the nearest block
+            Block targetBlock = player.getTargetBlockExact((int) range);
+            if (targetBlock != null && !targetBlock.getType().isAir()) {
+                player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] Grappling to block!");
+                visualizeGrapple(player, targetBlock.getLocation().add(0.5, 1, 0.5));
+                smoothlyPullPlayer(player, targetBlock.getLocation().add(0.5, 1, 0.5));
+                abilityUsed = true;
+            }
+        }
+
+        // Apply cooldown only if the ability was successfully used
+        if (abilityUsed) {
+          cooldownManager.setCooldown(player, TrimPattern.WILD, 20000);
+       }
+    }
+
+
+    // Visualize the grappling effect with particles
+    private void visualizeGrapple(Player player, Location target) {
+        Location start = player.getEyeLocation();
+        Vector direction = target.toVector().subtract(start.toVector());
+        double distance = start.distance(target);
+
+        for (double d = 0; d < distance; d += 0.5) {
+            Location particleLoc = start.clone().add(direction.clone().normalize().multiply(d));
+            player.getWorld().spawnParticle(Particle.CRIT, particleLoc, 1, 0, 0, 0, 0);
+        }
+    }
+
+
+    private void smoothlyPullPlayer(Player player, Location target) {
+        player.setGravity(false);
+        player.setFallDistance(0);
+
+        new BukkitRunnable() {
+            int ticks = 0;
+            final double maxSpeed = 1.8; // Slightly faster
+            boolean reachedTarget = false;
+
+            @Override
+            public void run() {
+                if (!player.isOnline() || player.isDead()) {
+                    finishGrapple();
+                    return;
+                }
+
+                double distanceSquared = player.getLocation().distanceSquared(target);
+
+                if (distanceSquared < 1.5) { // Stop earlier if close
+                    reachedTarget = true;
+                    finishGrapple();
+                    return;
+                }
+
+                if (ticks++ > 30) { // Reduce max time from 40 to 30 ticks (1.5 sec)
+                    finishGrapple();
+                    return;
+                }
+
+                // Dynamically calculate pull vector for smoother motion
+                Vector pullVector = target.toVector().subtract(player.getLocation().toVector());
+                double length = pullVector.length();
+                double speed = Math.min(maxSpeed, length * 0.35); // Adjusted speed factor
+
+                player.setVelocity(pullVector.normalize().multiply(speed));
+
+                // Effects
+                player.getWorld().spawnParticle(Particle.LARGE_SMOKE, player.getLocation(), 5, 0.2, 0.2, 0.2, 0);
+                if (ticks % 5 == 0) {
+                    player.playSound(player.getLocation(), Sound.ENTITY_ENDER_DRAGON_FLAP, 0.5f, 1.2f);
+                }
+            }
+
+            private void finishGrapple() {
+                player.setGravity(true);
+                if (reachedTarget) {
+                    player.setVelocity(new Vector(0, 0.3, 0));
+                    player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_ATTACK_SWEEP, 1.0f, 1.0f);
+                }
+                this.cancel();
+            }
+        }.runTaskTimer(plugin, 0, 1);
+    }
+
+
+    @EventHandler
+    public void onHotbarSwitch (PlayerItemHeldEvent event){
+        Player player = event.getPlayer();
+
+        if (player.isSneaking() && event.getNewSlot() == 8) {
+            WildPrimary(player);
+        }
+    }
+
+
+
+
+
+    private final int TRIGGER_HEALTH = 8; // 4 hearts (4 HP)
+    private final int COOLDOWN_TIME = 20; // Cooldown in seconds
+    private final Map<UUID, Long> cooldowns = new HashMap<>();
+    private final Set<UUID> frozenEntities = new HashSet<>();
+
+
+
+    @EventHandler
+    public void onPlayerDamage(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WILD)) return;
+
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (player.getHealth() > TRIGGER_HEALTH) return;
+            if (isOnCooldown(player)) {
+                player.sendMessage(ChatColor.RED + "§8[§cWild§8] Root Trap is on cooldown!");
+                return;
+            }
+
+            activateRootTrap(player);
+            setCooldown(player);
+        }, 1L); // Small delay to avoid fake damage event issues
+    }
+
+    public void activateRootTrap(Player player) {
+        if (isOnCooldown(player)) {
+            player.sendMessage(ChatColor.RED + "§8[§cWild§8] Root Trap is on cooldown!");
+            return;
+        }
+
+        setCooldown(player); // 20 seconds cooldown
+        player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] You activated Root Trap!");
+
+        List<LivingEntity> affectedEntities = new ArrayList<>();
+        for (Entity entity : player.getNearbyEntities(5, 3, 5)) {
+            if (entity instanceof LivingEntity && entity != player) {
+                LivingEntity target = (LivingEntity) entity;
+                affectedEntities.add(target);
+                frozenEntities.add(target.getUniqueId());
+                spawnVinesAround(target.getLocation());
+            }
+        }
+
+        // Freeze movement
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                for (LivingEntity entity : affectedEntities) {
+                    if (frozenEntities.contains(entity.getUniqueId())) {
+                        entity.setVelocity(new Vector(0, 0, 0));
+                    }
+                }
+            }
+        }.runTaskTimer(plugin, 0, 5);
+
+        // Remove vines and unfreeze after 5 seconds
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                for (LivingEntity entity : affectedEntities) {
+                    frozenEntities.remove(entity.getUniqueId());
+                }
+                removeVines(affectedEntities);
+            }
+        }.runTaskLater(plugin, 200);
+    }
+
+
+    private void spawnVinesAround(Location location) {
+        for (int x = -1; x <= 1; x++) {
+            for (int z = -1; z <= 1; z++) {
+                Location vineLoc = location.clone().add(x, 0, z);
+                if (vineLoc.getBlock().getType() == Material.AIR) {
+                    vineLoc.getBlock().setType(Material.VINE);
+                }
+            }
+        }
+    }
+
+    private void removeVines(List<LivingEntity> entities) {
+        for (LivingEntity entity : entities) {
+            Location location = entity.getLocation();
+            for (int x = -1; x <= 1; x++) {
+                for (int z = -1; z <= 1; z++) {
+                    Location vineLoc = location.clone().add(x, 0, z);
+                    if (vineLoc.getBlock().getType() == Material.VINE) {
+                        vineLoc.getBlock().setType(Material.AIR);
+                    }
+                }
+            }
+        }
+    }
+
+    @EventHandler
+    public void onPlayerMove(PlayerMoveEvent event) {
+        if (frozenEntities.contains(event.getPlayer().getUniqueId())) {
+            event.setCancelled(true);
+        }
+    }
+
+
+
+    // Checks if the ability is on cooldown
+    private boolean isOnCooldown(Player player) {
+        return cooldowns.containsKey(player.getUniqueId()) && (System.currentTimeMillis() < cooldowns.get(player.getUniqueId()));
+    }
+
+    // Sets the cooldown
+    private void setCooldown(Player player) {
+        cooldowns.put(player.getUniqueId(), System.currentTimeMillis() + (COOLDOWN_TIME * 1000L));
+    }
+
+
+}
+
+
+

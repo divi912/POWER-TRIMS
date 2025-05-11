@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="powertrims:jar">
+    <output-path>$USER_HOME$/AppData/Roaming/.feather/player-server/servers/3288708b-585a-4a4b-8a61-45e9b3dd895f/plugins</output-path>
+    <root id="archive" name="powertrims.jar">
+      <element id="module-output" name="powertrims" />
+    </root>
+  </artifact>
+</component>

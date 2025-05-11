@@ -1,0 +1,139 @@
+package MCplugin.powerTrims.Trims;
+
+import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import org.bukkit.*;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.inventory.meta.trim.TrimPattern;
+import org.bukkit.persistence.PersistentDataType;
+import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
+import org.bukkit.util.Vector;
+
+public class DuneTrim implements Listener {
+    private final JavaPlugin plugin;
+    private final TrimCooldownManager cooldownManager;
+    private final NamespacedKey effectKey;
+    private static final int SANDSTORM_RADIUS = 12;
+    private static final int SANDSTORM_DAMAGE = 6; // 3 Hearts
+    private static final long SANDSTORM_COOLDOWN = 60000; // 1 minutes
+
+    public DuneTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+        this.plugin = plugin;
+        this.cooldownManager = cooldownManager;
+        this.effectKey = new NamespacedKey(plugin, "dune_trim_effect");
+        DunePassive();
+    }
+
+    private void DunePassive() {
+        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.DUNE)) {
+                    if (!player.hasPotionEffect(PotionEffectType.HASTE)) {
+                        player.addPotionEffect(new PotionEffect(PotionEffectType.HASTE, Integer.MAX_VALUE, 0, true, false, true));
+                    }
+                    if (!player.hasPotionEffect(PotionEffectType.FIRE_RESISTANCE)) {
+                        player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, Integer.MAX_VALUE, 0, true, false, true));
+                    }
+                    player.getPersistentDataContainer().set(effectKey, PersistentDataType.BYTE, (byte) 1);
+                } else {
+                    if (player.getPersistentDataContainer().has(effectKey, PersistentDataType.BYTE)) {
+                        player.removePotionEffect(PotionEffectType.HASTE);
+                        player.removePotionEffect(PotionEffectType.FIRE_RESISTANCE);
+                        player.getPersistentDataContainer().remove(effectKey);
+                    }
+                }
+            }
+        }, 0L, 20L);
+    }
+
+    private void createExpandingEffect(Player player) {
+        // Center the effect at roughly the player's mid-body
+        Location center = player.getLocation().clone().add(0, player.getEyeHeight() / 2, 0);
+        World world = player.getWorld();
+
+        // Enhanced swirling, expanding particle effect
+        int layers = 15;
+        double timeOffset = (System.currentTimeMillis() % 3600) / 3600.0 * 2 * Math.PI;
+        for (int i = 1; i <= layers; i++) {
+            double radius = i * 0.4;
+            double yOffset = i * 0.15;
+            int particleCount = (int)(2 * Math.PI * radius * 6);
+            for (int j = 0; j < particleCount; j++) {
+                double angle = (2 * Math.PI / particleCount) * j + timeOffset;
+                double offsetX = Math.cos(angle) * radius;
+                double offsetZ = Math.sin(angle) * radius;
+                Location particleLoc = center.clone().add(offsetX, yOffset, offsetZ);
+                world.spawnParticle(Particle.FALLING_DUST, particleLoc, 1, 0, 0, 0, 0, Material.SAND.createBlockData());
+            }
+        }
+
+        for (int k = 0; k < 50; k++) {
+            double angle = Math.random() * 2 * Math.PI;
+            double distance = Math.random() * 1.0;
+            double offsetX = Math.cos(angle) * distance;
+            double offsetZ = Math.sin(angle) * distance;
+            Location burstLoc = center.clone().add(offsetX, Math.random() * 1.0, offsetZ);
+            world.spawnParticle(Particle.CRIT, burstLoc, 1, 0, 0, 0, 0);
+        }
+    }
+
+    public void DunePrimary(Player player) {
+        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.DUNE)) {
+            return;
+        }
+        if (cooldownManager.isOnCooldown(player, TrimPattern.DUNE)) {
+            return;
+        }
+
+        Location playerLoc = player.getLocation();
+        World world = player.getWorld();
+
+        // Play sound effects for activation
+        world.playSound(playerLoc, Sound.ENTITY_PLAYER_BREATH, 1.0f, 0.8f);
+        world.playSound(playerLoc, Sound.ENTITY_HUSK_AMBIENT, 1.0f, 1.0f);
+
+        // Call the enhanced expanding particle effect
+        createExpandingEffect(player);
+
+        // Additional effects:
+        world.spawnParticle(Particle.FALLING_DUST, playerLoc.clone().add(0, 0.1, 0), 80, 0.7, 1.2, 0.7, 0.1, Material.SAND.createBlockData());
+        world.spawnParticle(Particle.CAMPFIRE_COSY_SMOKE, playerLoc.clone().add(0, 0.1, 0), 40, 0.7, 1.2, 0.7, 0.1);
+        world.spawnParticle(Particle.CLOUD, playerLoc.clone().add(0, 1.5, 0), 60, 1.0, 0.6, 1.0, 0.1);
+
+        for (Entity entity : world.getNearbyEntities(playerLoc, SANDSTORM_RADIUS, SANDSTORM_RADIUS, SANDSTORM_RADIUS)) {
+            if (entity instanceof LivingEntity target && !target.equals(player)) {
+                Location targetLoc = target.getLocation();
+                Vector knockbackDirection = targetLoc.toVector().subtract(playerLoc.toVector()).normalize().multiply(1.5);
+                knockbackDirection.add(new Vector(0, 0.5, 0));
+                target.setVelocity(knockbackDirection);
+
+                target.damage(SANDSTORM_DAMAGE);
+                target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 60, 0)); // 3 seconds of blindness
+                target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 80, 1)); // 4 seconds of slowness
+
+                world.spawnParticle(Particle.FALLING_DUST, target.getLocation().add(0, 1, 0), 20, 0.5, 0.5, 0.5, 0.05, Material.SAND.createBlockData());
+            }
+        }
+
+        player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 100, 0));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 100, 0));
+
+        cooldownManager.setCooldown(player, TrimPattern.DUNE, SANDSTORM_COOLDOWN);
+        player.sendMessage("§8[§6Dune§8] §7You have unleashed a " + ChatColor.GOLD + "Sandstorm" + ChatColor.GRAY + "!");
+    }
+
+    @EventHandler
+    public void onHotbarSwitch(PlayerItemHeldEvent event) {
+        Player player = event.getPlayer();
+        if (player.isSneaking() && event.getNewSlot() == 8) {
+            DunePrimary(player);
+        }
+    }
+}
