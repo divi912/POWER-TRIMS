@@ -80,7 +80,6 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
     }
 
 
-    // Send a message to players when they join
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         event.getPlayer().sendMessage(ChatColor.DARK_AQUA + "§l★ §eThank you for using " + ChatColor.GOLD + "PowerTrims! " + ChatColor.DARK_AQUA + "§l★");
