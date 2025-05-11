@@ -25,14 +25,28 @@ package MCplugin.powerTrims;
 
 import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.Trims.*;
+import org.bukkit.ChatColor;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-public final class PowerTrimss extends JavaPlugin {
+public final class PowerTrimss extends JavaPlugin implements Listener {
     private TrimCooldownManager cooldownManager;
     private DataManager dataManager;
 
     @Override
     public void onEnable() {
+        getServer().getPluginManager().registerEvents(this, this);
+
+        // Stylish startup message
+        getLogger().info(ChatColor.GREEN + "--------------------------------------");
+        getLogger().info(ChatColor.GOLD + "   Thanks for using PowerTrims!");
+        getLogger().info(ChatColor.AQUA + "   Made by " + ChatColor.BOLD + "div");
+        getLogger().info(ChatColor.GREEN + "--------------------------------------");
+
+
+
         saveDefaultConfig();
 
         dataManager = new DataManager(this);
@@ -65,8 +79,25 @@ public final class PowerTrimss extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new SnoutTrim(this, cooldownManager), this);
     }
 
+
+    // Send a message to players when they join
+    @EventHandler
+    public void onPlayerJoin(PlayerJoinEvent event) {
+        event.getPlayer().sendMessage(ChatColor.DARK_AQUA + "§l★ §eThank you for using " + ChatColor.GOLD + "PowerTrims! " + ChatColor.DARK_AQUA + "§l★");
+        event.getPlayer().sendMessage(ChatColor.YELLOW + "§lMade by " + ChatColor.RED + "div" + ChatColor.YELLOW + " §l♥");
+    }
+
+
     @Override
     public void onDisable() {
+
+        // Stylish shutdown message
+        getLogger().info(ChatColor.RED + "--------------------------------------");
+        getLogger().info(ChatColor.GOLD + "   PowerTrims plugin has been disabled.");
+        getLogger().info(ChatColor.RED + "--------------------------------------");
+
+
+
         if (dataManager != null) {
             dataManager.saveData();
         }
