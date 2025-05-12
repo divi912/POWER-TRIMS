@@ -21,7 +21,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
+import MCplugin.powerTrims.Logic.PersistentTrustManager; 
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.block.Block;
@@ -47,7 +47,7 @@ public class TideTrim implements Listener {
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final NamespacedKey effectKey;
     private static final double WAVE_WIDTH = 3.0;
-    private static final int EFFECT_DURATION = 60; // 3 seconds (60 ticks)
+    private static final int EFFECT_DURATION = 300;
     private static final double KNOCKBACK_STRENGTH = 1.8;
     private static final int WALL_HEIGHT = 6;
     private static final int MOVE_DELAY = 2;

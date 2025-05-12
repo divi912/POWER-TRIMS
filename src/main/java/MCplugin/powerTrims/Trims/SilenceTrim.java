@@ -22,7 +22,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
+import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
@@ -56,7 +56,7 @@ public class SilenceTrim implements Listener {
     private static final long WARDENS_ECHO_COOLDOWN = 120000; // 2 minutes
     private static final long EFFECT_COOLDOWN = 1000; // 1 second
     private static final double PRIMARY_RADIUS = 15.0;
-    private static final int POTION_DURATION = 300; // 10 seconds
+    private static final int POTION_DURATION = 300; // 15 seconds
     private static final int PEARL_COOLDOWN = 200; // 10 seconds
     private static final double ECHO_RADIUS = 6.0;
     private static final int ECHO_EFFECT_DURATION = 60; // 3 seconds
@@ -132,6 +132,7 @@ public class SilenceTrim implements Listener {
         target.removePotionEffect(PotionEffectType.BLINDNESS); // Refresh blindness
         target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, POTION_DURATION, 0, false, true, true));
         target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, POTION_DURATION, 1, false, true, true));
+        target.addPotionEffect(new PotionEffect(PotionEffectType.HUNGER, 600, 1, false, true, true));
         target.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, POTION_DURATION, 1, false, true, true));
     }
 

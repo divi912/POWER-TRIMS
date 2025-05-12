@@ -340,9 +340,9 @@ public final class LoreChanger implements Listener {
 
             lore.add("");
             // Primary Ability: Gale Dash
-            lore.add(ChatColor.AQUA + "❖ " + ChatColor.GOLD + "Primary Ability: " + ChatColor.BOLD + "Gale Dash" + ChatColor.AQUA + " ❖");
-            lore.add(ChatColor.GRAY + "✦ Dashes forward rapidly, propelled by gusts of wind");
-            lore.add(ChatColor.GRAY + "✦ Leaves a trail of swirling wind particles that knock back enemies");
+            lore.add(ChatColor.AQUA + "❖ " + ChatColor.GOLD + "Primary Ability: " + ChatColor.BOLD + "Jetpack" + ChatColor.AQUA + " ❖");
+            lore.add(ChatColor.GRAY + "✦ fly rapidly, propelled by gusts of wind");
+            lore.add(ChatColor.GRAY + "✦ Consumes 1 heart per second to fly");
             lore.add(ChatColor.GOLD + "⏳ Cooldown: " + ChatColor.YELLOW + "1 minute");
             lore.add("");
             // Passive Ability: Flowing Agility

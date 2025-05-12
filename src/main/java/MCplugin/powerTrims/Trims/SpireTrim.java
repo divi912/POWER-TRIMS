@@ -22,7 +22,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
+import MCplugin.powerTrims.Logic.PersistentTrustManager; 
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
@@ -54,10 +54,10 @@ public class SpireTrim implements Listener {
 
     private static final int DASH_DISTANCE = 8;
     private static final double DASH_SPEED = 2.0; // Blocks per tick
-    private static final double KNOCKBACK_STRENGTH = 2.0;
+    private static final double KNOCKBACK_STRENGTH = 1.5;
     private static final int SLOW_DURATION = 60; // 3 seconds
     private static final int VULNERABLE_DURATION = 100; // 5 seconds
-    private static final double DAMAGE_AMPLIFICATION = 0.4; // increased damage
+    private static final double DAMAGE_AMPLIFICATION = 0.6; // increased damage
     private static final long ABILITY_COOLDOWN = 30000; // 30 seconds cooldown
 
     public SpireTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {

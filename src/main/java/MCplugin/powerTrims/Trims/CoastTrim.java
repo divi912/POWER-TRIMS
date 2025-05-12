@@ -22,7 +22,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
+import MCplugin.powerTrims.Logic.PersistentTrustManager; 
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -44,12 +44,12 @@ import org.bukkit.util.Vector;
 public class CoastTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
-    private final PersistentTrustManager trustManager; // Import the Trust Manager
+    private final PersistentTrustManager trustManager; 
     private final NamespacedKey effectKey;
 
     // Constants for ability behavior
     private static final int WATER_BURST_RADIUS = 30; // Radius to affect nearby entities
-    private static final int WATER_BURST_DAMAGE = 8; // Damage dealt to affected entities
+    private static final int WATER_BURST_DAMAGE = 10; // Damage dealt to affected entities
     private static final long WATER_BURST_COOLDOWN = 60000; // Cooldown in milliseconds
 
     public CoastTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {

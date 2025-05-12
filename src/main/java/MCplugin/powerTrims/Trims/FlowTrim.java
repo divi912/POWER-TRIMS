@@ -1,25 +1,3 @@
-/*
- * This file is part of [ POWER TRIMS ].
- *
- * [POWER TRIMS] is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * [ POWER TRIMS ] is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
- *
- * Copyright (C) [2025] [ div ].
- */
-
-
-
-
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
@@ -42,27 +20,34 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Flow Trim Ability: Toggleable Gale Dash costs health continuously until deactivated.
+ */
 public class FlowTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final NamespacedKey effectKey;
-    private static final int DASH_DURATION = 40;
-    private static final long DASH_COOLDOWN = 60000; // 1 minute
-    private final Map<UUID, BukkitRunnable> activeDashTasks = new HashMap<>();
-    private final Map<UUID, Boolean> isDashing = new HashMap<>(); // Track if the player is dashing
+    private final NamespacedKey dashEndFallImmunityKey;
+
+    // Heart cost settings
+    private static final int HEART_COST_INTERVAL = 20;       // ticks (1 second)
+    private static final double HEART_COST_AMOUNT = 2.0;     // HP (1 heart)
+    private static final long DASH_COOLDOWN = 60000;         // ms
+
+    private final Map<UUID, BukkitRunnable> dashTasks = new HashMap<>();
+    private final Map<UUID, Boolean> isDashing = new HashMap<>();
 
     public FlowTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.effectKey = new NamespacedKey(plugin, "flow_trim_effect");
+        this.dashEndFallImmunityKey = new NamespacedKey(plugin, "flow_trim_dash_end_immune");
         FlowPassive();
     }
 
     private void FlowPassive() {
-        // Passive Ability: Grants Speed II while wearing full Flow Trim Armor.
         Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             for (Player player : Bukkit.getOnlinePlayers()) {
-
                 if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.FLOW)) {
                     if (!player.hasPotionEffect(PotionEffectType.SPEED)) {
                         player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, Integer.MAX_VALUE, 1, true, false, true));
@@ -78,74 +63,89 @@ public class FlowTrim implements Listener {
         }, 0L, 20L);
     }
 
-    public void FlowPrimary(Player player) {
-        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.FLOW)) {
+    public void toggleDash(Player player) {
+        UUID id = player.getUniqueId();
+        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.FLOW)) return;
+
+        // Deactivate if already dashing
+        if (isDashing.getOrDefault(id, false)) {
+            deactivateDash(player, "You have deactivated §bGale Dash§7.");
             return;
         }
 
+        // Cannot activate if on cooldown
         if (cooldownManager.isOnCooldown(player, TrimPattern.FLOW)) {
+            player.sendMessage("§8[§bFlow§8] §7Ability on cooldown!");
             return;
         }
-
-        // Cancel any existing Gale Dash task for this player
-        if (activeDashTasks.containsKey(player.getUniqueId())) {
-            activeDashTasks.get(player.getUniqueId()).cancel();
-        }
-
-        // Visual and sound effects for activation
-        Location playerLoc = player.getLocation();
+        player.setAllowFlight(true);
+        // Activation effects
+        Location loc = player.getLocation();
         World world = player.getWorld();
-        world.playSound(playerLoc, Sound.ENTITY_BLAZE_SHOOT, 1.0f, 1.5f);
-
-        // Create wind particle effects to signal the dash activation
+        world.playSound(loc, Sound.ENTITY_BLAZE_SHOOT, 1.0f, 1.5f);
         createWindEffect(player);
 
-        // Start Gale Dash effect: propelling the player forward over a short duration.
-        BukkitRunnable dashTask = new BukkitRunnable() {
-            int ticks = 0;
+        // Start dash task
+        BukkitRunnable task = new BukkitRunnable() {
+            int tickCount = 0;
+
             @Override
             public void run() {
-                if (ticks >= DASH_DURATION || !player.isOnline()) {
-                    cancel();
-                    activeDashTasks.remove(player.getUniqueId());
-                    isDashing.put(player.getUniqueId(), false); // Stop the dash flag
+                if (!player.isOnline() || !isDashing.getOrDefault(id, false)) {
+                    this.cancel();
                     return;
                 }
 
-                // Propel the player in the direction they are facing.
-                Vector direction = player.getLocation().getDirection().normalize();
-                player.setVelocity(direction.multiply(1.2));
+                // Drain health each interval
+                if (tickCount % HEART_COST_INTERVAL == 0) {
+                    double hp = player.getHealth();
+                    if (hp > HEART_COST_AMOUNT) {
+                        player.setHealth(hp - HEART_COST_AMOUNT);
+                    } else {
+                        player.sendMessage("§8[§bFlow§8] §cNot enough health to maintain Gale Dash!");
+                        deactivateDash(player, "Gale Dash ended due to low health.");
+                        this.cancel();
+                        return;
+                    }
+                }
 
-                // Create trailing wind particles along the dash.
+                // Propel and particle
+                Vector dir = player.getLocation().getDirection().normalize();
+                player.setVelocity(dir.multiply(1.2));
                 createWindEffect(player);
-                ticks++;
+
+                tickCount++;
             }
         };
 
-        // Set the player as dashing
-        isDashing.put(player.getUniqueId(), true);
-        dashTask.runTaskTimer(plugin, 0L, 1L);
-        activeDashTasks.put(player.getUniqueId(), dashTask);
+        isDashing.put(id, true);
+        dashTasks.put(id, task);
+        task.runTaskTimer(plugin, 0L, 1L);
+        player.sendMessage("§8[§bFlow§8] §7Activated §bGale Dash§7! §7(uses " + (HEART_COST_AMOUNT/2) + " ❤/sec)");
+    }
 
-        // Set cooldown and notify the player.
+    private void deactivateDash(Player player, String message) {
+        UUID id = player.getUniqueId();
+        if (dashTasks.containsKey(id)) {
+            dashTasks.get(id).cancel();
+            dashTasks.remove(id);
+        }
+        isDashing.put(id, false);
+        player.setAllowFlight(false);
         cooldownManager.setCooldown(player, TrimPattern.FLOW, DASH_COOLDOWN);
-        player.sendMessage("§8[§bFlow§8] §7You have activated " + ChatColor.AQUA + "Gale Dash" + ChatColor.GRAY + "!");
+        player.sendMessage("§8[§bFlow§8] §7" + message + " Cooldown applied.");
+        player.getPersistentDataContainer().set(dashEndFallImmunityKey, PersistentDataType.BYTE, (byte) 1); // Set the flag
     }
 
     private void createWindEffect(Player player) {
         Location loc = player.getLocation();
         World world = player.getWorld();
-
-        // Create a circular pattern of cloud particles behind the player.
         for (int i = 0; i < 8; i++) {
             double angle = Math.toRadians(i * 45);
-            double offsetX = Math.cos(angle) * 0.5;
-            double offsetZ = Math.sin(angle) * 0.5;
-            Location particleLoc = loc.clone().add(-offsetX, 0.5, -offsetZ);
-            world.spawnParticle(Particle.CLOUD, particleLoc, 0, 0, 0, 0, 0.05);
+            double x = Math.cos(angle) * 0.5;
+            double z = Math.sin(angle) * 0.5;
+            world.spawnParticle(Particle.CLOUD, loc.clone().add(-x, 0.5, -z), 0, 0, 0, 0, 0.05);
         }
-
-        // Central burst effect using a subtle magic particle for additional flair.
         world.spawnParticle(Particle.WITCH, loc.clone().add(0, 1, 0), 5, 0.2, 0.2, 0.2, 0.05);
     }
 
@@ -153,7 +153,7 @@ public class FlowTrim implements Listener {
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
         Player player = event.getPlayer();
         if (player.isSneaking() && event.getNewSlot() == 8) {
-            FlowPrimary(player);
+            toggleDash(player);
         }
     }
 
@@ -161,7 +161,10 @@ public class FlowTrim implements Listener {
     public void onEntityFallDamage(EntityDamageEvent event) {
         if (event.getEntity() instanceof Player player) {
             if (event.getCause() == EntityDamageEvent.DamageCause.FALL && isDashing.getOrDefault(player.getUniqueId(), false)) {
-                event.setCancelled(true); // Cancel fall damage if the player is dashing
+                event.setCancelled(true);
+            } else if (event.getCause() == EntityDamageEvent.DamageCause.FALL && player.getPersistentDataContainer().has(dashEndFallImmunityKey, PersistentDataType.BYTE)) {
+                event.setCancelled(true);
+                player.getPersistentDataContainer().remove(dashEndFallImmunityKey); // Remove the flag
             }
         }
     }

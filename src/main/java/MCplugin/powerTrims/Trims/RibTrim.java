@@ -23,7 +23,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
+import MCplugin.powerTrims.Logic.PersistentTrustManager; 
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
@@ -49,7 +49,7 @@ import java.util.*;
 public class RibTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
-    private final PersistentTrustManager trustManager; // Import the Trust Manager
+    private final PersistentTrustManager trustManager; 
     private final NamespacedKey effectKey;
     private static final long RIB_COOLDOWN = 60000; // 1 minute cooldown
 

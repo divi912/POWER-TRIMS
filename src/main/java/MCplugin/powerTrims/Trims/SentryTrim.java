@@ -22,7 +22,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
+import MCplugin.powerTrims.Logic.PersistentTrustManager; 
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.entity.*;
@@ -51,7 +51,6 @@ public class SentryTrim implements Listener {
     private static final int ARROW_COUNT = 4;
     private static final double SPREAD = 0.15;
     private static final int COOLDOWN = 90 * 1000; // 90 seconds
-    private static final int PARTICLE_DURATION = 20; // 1 second of particles
 
     public SentryTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
@@ -171,6 +170,8 @@ public class SentryTrim implements Listener {
         double trueDamage = 1.0; // Adjust as needed
         double newHealth = Math.max(0, target.getHealth() - trueDamage);
         target.setHealth(newHealth);
+        target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 200, 1, false, true, true));
+        target.addPotionEffect(new PotionEffect(PotionEffectType.HUNGER, 600, 1, false, true, true));
 
         // Additional hit effects
         target.getWorld().spawnParticle(Particle.CRIT, target.getLocation().add(0, 1, 0), 10, 0.2, 0.2, 0.2, 0.1);

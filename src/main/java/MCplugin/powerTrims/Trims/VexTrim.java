@@ -22,7 +22,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
+import MCplugin.powerTrims.Logic.PersistentTrustManager; 
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 
 import org.bukkit.*;
@@ -151,9 +151,10 @@ public class VexTrim implements Listener {
                             continue; // Skip trusted players
                         }
                         target.damage(8.0, vexUser);
-                        target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 200, 1));
+                        target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 300, 1));
                         target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 200, 1));
-                        target.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 200, 0));
+                        target.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 300, 0));
+                        target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 100, 0));
                     }
                 }
             }

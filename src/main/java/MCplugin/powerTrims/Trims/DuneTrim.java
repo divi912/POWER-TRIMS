@@ -22,7 +22,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
+import MCplugin.powerTrims.Logic.PersistentTrustManager; 
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
@@ -44,7 +44,7 @@ public class DuneTrim implements Listener {
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final NamespacedKey effectKey;
     private static final int SANDSTORM_RADIUS = 12;
-    private static final int SANDSTORM_DAMAGE = 6; // 3 Hearts
+    private static final int SANDSTORM_DAMAGE = 10;
     private static final long SANDSTORM_COOLDOWN = 60000; // 1 minutes
 
     public DuneTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
@@ -143,8 +143,8 @@ public class DuneTrim implements Listener {
                 target.setVelocity(knockbackDirection);
 
                 target.damage(SANDSTORM_DAMAGE);
-                target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 60, 0)); // 3 seconds of blindness
-                target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 80, 1)); // 4 seconds of slowness
+                target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 200, 0)); // 3 seconds of blindness
+                target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 200, 1)); // 4 seconds of slowness
 
                 world.spawnParticle(Particle.FALLING_DUST, target.getLocation().add(0, 1, 0), 20, 0.5, 0.5, 0.5, 0.05, Material.SAND.createBlockData());
             }
