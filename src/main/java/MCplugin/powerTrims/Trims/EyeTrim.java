@@ -1,6 +1,28 @@
+/*
+ * This file is part of [ POWER TRIMS ].
+ *
+ * [POWER TRIMS] is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * [ POWER TRIMS ] is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Copyright (C) [2025] [ div ].
+ */
+
+
+
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.entity.*;
@@ -21,15 +43,17 @@ import java.util.UUID;
 public class EyeTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
+    private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final NamespacedKey effectKey;
     private static final double TRUE_SIGHT_RADIUS = 80.0;
     private static final int TRUE_SIGHT_DURATION = 600; // 30 seconds (in ticks)
     private static final long TRUE_SIGHT_COOLDOWN = 120000; // 2 minutes
     private final Map<UUID, BukkitRunnable> activeTrueSightTasks = new HashMap<>();
 
-    public EyeTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+    public EyeTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
+        this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "eye_trim_effect");
         EyePassive();
     }
@@ -66,6 +90,7 @@ public class EyeTrim implements Listener {
         player.getWorld().playSound(loc, Sound.ENTITY_ELDER_GUARDIAN_CURSE, 1.0f, 2.0f);
         player.getWorld().playSound(loc, Sound.BLOCK_BEACON_ACTIVATE, 1.0f, 1.5f);
         createEyeEffect(player);
+        Player eyeUser = player; // Store the player using the ability
 
         // Start True Sight task
         BukkitRunnable trueSightTask = new BukkitRunnable() {
@@ -73,17 +98,20 @@ public class EyeTrim implements Listener {
 
             @Override
             public void run() {
-                if (ticks >= TRUE_SIGHT_DURATION || !player.isOnline()) {
+                if (ticks >= TRUE_SIGHT_DURATION || !eyeUser.isOnline()) {
                     cancel();
-                    activeTrueSightTasks.remove(player.getUniqueId());
+                    activeTrueSightTasks.remove(eyeUser.getUniqueId());
                     return;
                 }
 
-                if (ticks % 10 == 0) createEyeEffect(player);
+                if (ticks % 10 == 0) createEyeEffect(eyeUser);
 
                 // Highlight entities and apply effects
-                for (Entity entity : player.getWorld().getNearbyEntities(player.getLocation(), TRUE_SIGHT_RADIUS, TRUE_SIGHT_RADIUS, TRUE_SIGHT_RADIUS)) {
-                    if (entity instanceof LivingEntity target && !target.equals(player)) {
+                for (Entity entity : eyeUser.getWorld().getNearbyEntities(eyeUser.getLocation(), TRUE_SIGHT_RADIUS, TRUE_SIGHT_RADIUS, TRUE_SIGHT_RADIUS)) {
+                    if (entity instanceof LivingEntity target && !target.equals(eyeUser)) {
+                        if (target instanceof Player targetPlayer && trustManager.isTrusted(eyeUser.getUniqueId(), targetPlayer.getUniqueId())) {
+                            continue; // Skip trusted players
+                        }
                         // Remove invisibility
                         if (target.hasPotionEffect(PotionEffectType.INVISIBILITY)) {
                             target.removePotionEffect(PotionEffectType.INVISIBILITY);
@@ -106,7 +134,7 @@ public class EyeTrim implements Listener {
         };
 
         trueSightTask.runTaskTimer(plugin, 0L, 2L);
-        activeTrueSightTasks.put(player.getUniqueId(), trueSightTask);
+        activeTrueSightTasks.put(eyeUser.getUniqueId(), trueSightTask);
 
         cooldownManager.setCooldown(player, TrimPattern.EYE, TRUE_SIGHT_COOLDOWN);
         player.sendMessage("§8[§bEye§8] §7True Sight activated!");

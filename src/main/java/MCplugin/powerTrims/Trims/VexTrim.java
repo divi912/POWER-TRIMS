@@ -1,6 +1,28 @@
+/*
+ * This file is part of [ POWER TRIMS ].
+ *
+ * [POWER TRIMS] is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * [ POWER TRIMS ] is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Copyright (C) [2025] [ div ].
+ */
+
+
+
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 
 import org.bukkit.*;
@@ -22,6 +44,7 @@ import java.util.*;
 public class VexTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
+    private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final Map<UUID, Long> cooldowns = new HashMap<>();
     private static final long COOLDOWN_TIME = 120000; // 20 seconds cooldown
     private static final long HIDE_DURATION = 10000; // 10 seconds hide duration
@@ -31,9 +54,10 @@ public class VexTrim implements Listener {
 
     private BukkitRunnable passiveTask;
 
-    public VexTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+    public VexTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
+        this.trustManager = trustManager; // Initialize the Trust Manager
         instance = this;
         Bukkit.getPluginManager().registerEvents(this, plugin);
 
@@ -48,7 +72,7 @@ public class VexTrim implements Listener {
         if (passiveTask != null) {
             passiveTask.cancel();
         }
-        
+
         passiveTask = new BukkitRunnable() {
             @Override
             public void run() {
@@ -94,6 +118,7 @@ public class VexTrim implements Listener {
 
         Location center = player.getLocation().clone().add(0, 0.1, 0);
         Particle.DustOptions dust = new Particle.DustOptions(Color.PURPLE, 1.0f);
+        Player vexUser = player; // Store the player using the ability
 
         // Play sound
         player.getWorld().playSound(center, Sound.ENTITY_VEX_CHARGE, 1.0f, 1.0f);
@@ -121,8 +146,11 @@ public class VexTrim implements Listener {
                     this.cancel();
                     // After effect, apply damage and debuffs
                     for (LivingEntity target : center.getWorld().getNearbyLivingEntities(center, radius, radius, radius)) {
-                        if (target.equals(player)) continue;
-                        target.damage(8.0, player);
+                        if (target.equals(vexUser)) continue;
+                        if (target instanceof Player targetPlayer && trustManager.isTrusted(vexUser.getUniqueId(), targetPlayer.getUniqueId())) {
+                            continue; // Skip trusted players
+                        }
+                        target.damage(8.0, vexUser);
                         target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 200, 1));
                         target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 200, 1));
                         target.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 200, 0));
@@ -183,6 +211,3 @@ public class VexTrim implements Listener {
                 cooldowns.get(player.getUniqueId()) > System.currentTimeMillis();
     }
 }
-
-
-

@@ -1,6 +1,28 @@
+/*
+ * This file is part of [ POWER TRIMS ].
+ *
+ * [POWER TRIMS] is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * [ POWER TRIMS ] is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Copyright (C) [2025] [ div ].
+ */
+
+
+
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
@@ -26,6 +48,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class SilenceTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
+    private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final NamespacedKey effectKey;
     private final Map<UUID, AtomicLong> wardensEchoCooldowns = new ConcurrentHashMap<>();
     private final Map<UUID, AtomicLong> effectCooldowns = new ConcurrentHashMap<>();
@@ -39,9 +62,10 @@ public class SilenceTrim implements Listener {
     private static final int ECHO_EFFECT_DURATION = 60; // 3 seconds
     private static final int MAX_AFFECTED_ENTITIES = 30;
 
-    public SilenceTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+    public SilenceTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
+        this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "silence_trim_effect");
         SilencePassive();
     }
@@ -68,6 +92,7 @@ public class SilenceTrim implements Listener {
 
         Location playerLocation = player.getLocation();
         createParticleCircle(player, playerLocation, PRIMARY_RADIUS, 20);
+        Player silenceUser = player; // Store the player using the ability
 
         if (!isOnEffectCooldown(player)) {
             player.getWorld().playSound(playerLocation, Sound.ENTITY_WARDEN_ANGRY, 2.0f, 1.5f);
@@ -81,12 +106,18 @@ public class SilenceTrim implements Listener {
         for (Entity entity : player.getWorld().getNearbyEntities(playerLocation, PRIMARY_RADIUS, PRIMARY_RADIUS, PRIMARY_RADIUS)) {
             if (affectedCount >= MAX_AFFECTED_ENTITIES) break;
 
-            if (entity instanceof Player target && !target.equals(player)) {
+            if (entity instanceof Player target && !target.equals(silenceUser)) {
+                if (trustManager.isTrusted(silenceUser.getUniqueId(), target.getUniqueId())) {
+                    continue; // Skip trusted players
+                }
                 target.setCooldown(Material.ENDER_PEARL, PEARL_COOLDOWN);
                 affectedCount++;
             }
 
-            if (entity instanceof LivingEntity target && !target.equals(player)) {
+            if (entity instanceof LivingEntity target && !target.equals(silenceUser)) {
+                if (target instanceof Player targetPlayer && trustManager.isTrusted(silenceUser.getUniqueId(), targetPlayer.getUniqueId())) {
+                    continue; // Skip trusted players
+                }
                 applyEffects(target);
                 sendMessages(target);
                 affectedCount++;
@@ -190,9 +221,13 @@ public class SilenceTrim implements Listener {
         Location playerLocation = player.getLocation();
         player.getWorld().playSound(playerLocation, Sound.ENTITY_WARDEN_SONIC_BOOM, 1.5f, 0.6f);
         triggerWardensEcho(player);
+        Player silenceUser = player; // Store the player using the ability
 
         for (Entity entity : player.getWorld().getNearbyEntities(playerLocation, ECHO_RADIUS, ECHO_RADIUS, ECHO_RADIUS)) {
-            if (entity instanceof LivingEntity target && !target.equals(player)) {
+            if (entity instanceof LivingEntity target && !target.equals(silenceUser)) {
+                if (target instanceof Player targetPlayer && trustManager.isTrusted(silenceUser.getUniqueId(), targetPlayer.getUniqueId())) {
+                    continue; // Skip trusted players
+                }
                 applyEchoEffects(player, target);
             }
         }

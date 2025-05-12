@@ -1,6 +1,28 @@
+/*
+ * This file is part of [ POWER TRIMS ].
+ *
+ * [POWER TRIMS] is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * [ POWER TRIMS ] is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Copyright (C) [2025] [ div ].
+ */
+
+
+
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -22,6 +44,7 @@ import org.bukkit.util.Vector;
 public class CoastTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
+    private final PersistentTrustManager trustManager; // Import the Trust Manager
     private final NamespacedKey effectKey;
 
     // Constants for ability behavior
@@ -29,9 +52,10 @@ public class CoastTrim implements Listener {
     private static final int WATER_BURST_DAMAGE = 8; // Damage dealt to affected entities
     private static final long WATER_BURST_COOLDOWN = 60000; // Cooldown in milliseconds
 
-    public CoastTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+    public CoastTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
+        this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "coast_trim_effect");
         CoastPassive(); // Start the passive effect scheduler
     }
@@ -62,6 +86,7 @@ public class CoastTrim implements Listener {
 
         Location playerLoc = player.getLocation();
         World world = player.getWorld();
+        Player coastUser = player; // Store the player using the ability
 
         // Play activation sound effects
         world.playSound(playerLoc, Sound.ENTITY_DOLPHIN_PLAY, 1.0f, 1.5f);
@@ -81,7 +106,10 @@ public class CoastTrim implements Listener {
 
         // Affect nearby entities: pull them, damage them, and apply debuffs
         for (Entity entity : world.getNearbyEntities(playerLoc, WATER_BURST_RADIUS, WATER_BURST_RADIUS, WATER_BURST_RADIUS)) {
-            if (entity instanceof LivingEntity target && !target.equals(player)) {
+            if (entity instanceof LivingEntity target && !target.equals(coastUser)) {
+                if (target instanceof Player targetPlayer && trustManager.isTrusted(coastUser.getUniqueId(), targetPlayer.getUniqueId())) {
+                    continue; // Skip trusted players
+                }
                 // Apply instant damage and potion debuffs
                 target.damage(WATER_BURST_DAMAGE);
                 target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 80, 1)); // 4 seconds
@@ -92,11 +120,11 @@ public class CoastTrim implements Listener {
                 new BukkitRunnable() {
                     @Override
                     public void run() {
-                        if (!target.isValid() || target.getLocation().distance(player.getLocation()) < 2) {
+                        if (!target.isValid() || target.getLocation().distance(coastUser.getLocation()) < 2) {
                             cancel();
                             return;
                         }
-                        Vector pullDirection = player.getLocation().toVector().subtract(target.getLocation().toVector()).normalize().multiply(1.0);
+                        Vector pullDirection = coastUser.getLocation().toVector().subtract(target.getLocation().toVector()).normalize().multiply(1.0);
                         target.setVelocity(pullDirection);
                     }
                 }.runTaskTimer(plugin, 0L, 1L); // Pull every tick

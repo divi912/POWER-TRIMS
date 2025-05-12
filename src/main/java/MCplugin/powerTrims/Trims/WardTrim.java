@@ -1,6 +1,27 @@
+/*
+ * This file is part of [ POWER TRIMS ].
+ *
+ * [POWER TRIMS] is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * [ POWER TRIMS ] is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Copyright (C) [2025] [ div ].
+ */
+
+
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -27,6 +48,7 @@ import java.util.UUID;
 public class WardTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
+    private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final NamespacedKey effectKey;
     private static final int BARRIER_DURATION = 200; // 10 seconds
     private static final int ABSORPTION_LEVEL = 4; // Absorption V (increased from III)
@@ -40,9 +62,10 @@ public class WardTrim implements Listener {
             .build();
 
 
-    public WardTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+    public WardTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
+        this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "ward_trim_effect");
         WardPassive();
     }
@@ -55,6 +78,9 @@ public class WardTrim implements Listener {
                 Entity attacker = event.getDamager();
 
                 if (attacker instanceof LivingEntity) {
+                    if (attacker instanceof Player attackingPlayer && trustManager.isTrusted(player.getUniqueId(), attackingPlayer.getUniqueId())) {
+                        return; // Don't apply knockback to trusted players
+                    }
                     // Apply knockback effect
                     Vector knockbackDirection = attacker.getLocation().toVector()
                             .subtract(player.getLocation().toVector()).normalize().multiply(1.5);
@@ -105,12 +131,12 @@ public class WardTrim implements Listener {
         player.getWorld().playSound(playerLoc, Sound.BLOCK_BEACON_ACTIVATE, 1.0f, 1.2f);
         player.getWorld().playSound(playerLoc, Sound.BLOCK_ENCHANTMENT_TABLE_USE, 1.0f, 0.8f);
         player.getWorld().playSound(playerLoc, Sound.BLOCK_ANVIL_USE, 0.7f, 1.5f);
-        
+
         // Apply enhanced protection effects to the player
         player.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, BARRIER_DURATION, ABSORPTION_LEVEL, true, true, true));
         player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, BARRIER_DURATION, RESISTANCE_BOOST_LEVEL, true, true, true));
         player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, BARRIER_DURATION, 0, true, true, true));
-        
+
         // Create barrier particle effect
         createBarrierEffect(player);
 
@@ -168,7 +194,7 @@ public class WardTrim implements Listener {
         // Create dome effect
         new BukkitRunnable() {
             double phi = 0;
-            
+
             @Override
             public void run() {
                 phi += Math.PI / 8;
@@ -181,7 +207,7 @@ public class WardTrim implements Listener {
                     double x = 1.5 * Math.sin(phi) * Math.cos(theta);
                     double y = 1.5 * Math.cos(phi) + 1;
                     double z = 1.5 * Math.sin(phi) * Math.sin(theta);
-                    
+
                     Location particleLoc = center.clone().add(x, y, z);
                     world.spawnParticle(Particle.END_ROD, particleLoc, 1, 0, 0, 0, 0);
                 }

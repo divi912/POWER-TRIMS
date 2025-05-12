@@ -1,6 +1,28 @@
+/*
+ * This file is part of [ POWER TRIMS ].
+ *
+ * [POWER TRIMS] is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * [ POWER TRIMS ] is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Copyright (C) [2025] [ div ].
+ */
+
+
+
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
@@ -20,14 +42,16 @@ import org.bukkit.util.Vector;
 public class RaiserTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
+    private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final NamespacedKey effectKey;
     private static final long SURGE_COOLDOWN = 120000; // 2 minutes cooldown
     private static final double ENTITY_PULL_RADIUS = 15.0;
     private static final double PLAYER_UPWARD_BOOST = 1.5;
 
-    public RaiserTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+    public RaiserTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
+        this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "raiser_trim_effect");
         RaiserPassive();
     }
@@ -62,12 +86,15 @@ public class RaiserTrim implements Listener {
 
         World world = player.getWorld();
         Location playerLoc = player.getLocation();
+        Player raiserUser = player; // Store the player using the ability
 
         // Apply Ender Pearl cooldown to nearby players immediately on ability activation
         for (Entity entity : world.getNearbyEntities(playerLoc, ENTITY_PULL_RADIUS, ENTITY_PULL_RADIUS, ENTITY_PULL_RADIUS)) {
-            if (entity instanceof Player target && !target.equals(player)) {
-                target.setCooldown(Material.ENDER_PEARL, 200); // 10 seconds (200 ticks)
-                target.sendMessage(ChatColor.DARK_PURPLE + "Raiser's Surge disrupted your teleportation!");
+            if (entity instanceof Player target && !target.equals(raiserUser)) {
+                if (!trustManager.isTrusted(raiserUser.getUniqueId(), target.getUniqueId())) {
+                    target.setCooldown(Material.ENDER_PEARL, 200); // 10 seconds (200 ticks)
+                    target.sendMessage(ChatColor.DARK_PURPLE + "Raiser's Surge disrupted your teleportation!");
+                }
             }
         }
 
@@ -84,15 +111,18 @@ public class RaiserTrim implements Listener {
 
             // Pull and launch nearby entities
             for (Entity entity : world.getNearbyEntities(landingLoc, ENTITY_PULL_RADIUS, ENTITY_PULL_RADIUS, ENTITY_PULL_RADIUS)) {
-                if (entity instanceof LivingEntity target && !target.equals(player)) {
-                    Vector pull = player.getLocation().toVector().subtract(target.getLocation().toVector()).normalize().multiply(1.5);
+                if (entity instanceof LivingEntity target && !target.equals(raiserUser)) {
+                    if (target instanceof Player targetPlayer && trustManager.isTrusted(raiserUser.getUniqueId(), targetPlayer.getUniqueId())) {
+                        continue; // Skip trusted players
+                    }
+                    Vector pull = raiserUser.getLocation().toVector().subtract(target.getLocation().toVector()).normalize().multiply(1.5);
                     pull.setY(1.2); // Boost upward
                     target.setVelocity(pull);
                     target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 200, 2)); // Slowness III for 5 seconds
 
 
                     // Apply Ender Pearl cooldown to players
-                    if (target instanceof Player targetPlayer && !target.equals(player)) {
+                    if (target instanceof Player targetPlayer && !target.equals(raiserUser) && !trustManager.isTrusted(raiserUser.getUniqueId(), targetPlayer.getUniqueId())) {
                         targetPlayer.setCooldown(Material.ENDER_PEARL, 200); // 10 seconds (200 ticks)
                     }
                 }

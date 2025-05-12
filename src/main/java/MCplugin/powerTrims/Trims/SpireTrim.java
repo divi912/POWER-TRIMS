@@ -1,6 +1,28 @@
+/*
+ * This file is part of [ POWER TRIMS ].
+ *
+ * [POWER TRIMS] is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * [ POWER TRIMS ] is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Copyright (C) [2025] [ div ].
+ */
+
+
+
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
@@ -24,6 +46,7 @@ import java.util.*;
 public class SpireTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
+    private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final NamespacedKey effectKey;
     private final NamespacedKey vulnerableKey;
     private final Set<UUID> markedTargets;
@@ -37,9 +60,10 @@ public class SpireTrim implements Listener {
     private static final double DAMAGE_AMPLIFICATION = 0.4; // increased damage
     private static final long ABILITY_COOLDOWN = 30000; // 30 seconds cooldown
 
-    public SpireTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+    public SpireTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
+        this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "spire_trim_effect");
         this.vulnerableKey = new NamespacedKey(plugin, "spire_vulnerable_effect");
         this.markedTargets = new HashSet<>();
@@ -104,8 +128,15 @@ public class SpireTrim implements Listener {
 
                 for (Entity entity : currentLoc.getWorld().getNearbyEntities(currentLoc, 1.5, 1.5, 1.5)) {
                     if (entity instanceof LivingEntity && entity != player && !hitEntities.contains(entity)) {
-                        hitEntities.add(entity);
-                        handleEntityCollision((LivingEntity) entity, direction);
+                        LivingEntity target = (LivingEntity) entity;
+                        if (target instanceof Player targetPlayer) {
+                            // Check if the target player is trusted by the dashing player
+                            if (trustManager.isTrusted(player.getUniqueId(), targetPlayer.getUniqueId())) {
+                                continue; // Skip trusted players
+                            }
+                        }
+                        hitEntities.add(target);
+                        handleEntityCollision(target, direction, player); // Pass the player as well
                     }
                 }
 
@@ -157,7 +188,12 @@ public class SpireTrim implements Listener {
         }
     }
 
-    private void handleEntityCollision(LivingEntity target, Vector dashDirection) {
+    private void handleEntityCollision(LivingEntity target, Vector dashDirection, Player damager) {
+        if (target instanceof Player targetPlayer) {
+            if (trustManager.isTrusted(damager.getUniqueId(), targetPlayer.getUniqueId())) {
+                return; // Do nothing if the target is trusted
+            }
+        }
         // Knockback effect
         Vector knockbackVec = dashDirection.clone().multiply(KNOCKBACK_STRENGTH);
         knockbackVec.setY(Math.max(0.2, knockbackVec.getY()));
@@ -203,7 +239,12 @@ public class SpireTrim implements Listener {
 
         // If the target has been marked, apply damage amplification
         if (markedTargets.contains(target.getUniqueId())) {
-            event.setDamage(event.getDamage() * (1 + DAMAGE_AMPLIFICATION)); // Amplify damage by 15%
+            // Check if the target is trusted (even though they were marked).
+            // This is a safety measure in case of timing issues.
+            if (target instanceof Player targetPlayer && trustManager.isTrusted(player.getUniqueId(), targetPlayer.getUniqueId())) {
+                return; // Don't amplify damage against trusted players
+            }
+            event.setDamage(event.getDamage() * (1 + DAMAGE_AMPLIFICATION)); // Amplify damage
             markedTargets.remove(target.getUniqueId());
 
             // Particle effects and sound for the amplified damage

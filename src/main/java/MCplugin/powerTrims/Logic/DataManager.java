@@ -1,3 +1,24 @@
+/*
+ * This file is part of [ POWER TRIMS ].
+ *
+ * [POWER TRIMS] is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * [ POWER TRIMS ] is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Copyright (C) [2025] [ div ].
+ */
+
+
+
 package MCplugin.powerTrims.Logic;
 
 import org.bukkit.configuration.file.FileConfiguration;
@@ -119,7 +140,7 @@ public class DataManager {
         else if (pattern == TrimPattern.FLOW) return "FLOW";
         else if (pattern == TrimPattern.RIB) return "RIB";
         else if (pattern == TrimPattern.TIDE) return "TIDE";
-        else if (pattern == TrimPattern.COAST) return "VEX";
+        else if (pattern == TrimPattern.COAST) return "COAST";
         else if (pattern == TrimPattern.HOST) return "HOST";
         else if (pattern == TrimPattern.RAISER) return "RAISER";
         else if (pattern == TrimPattern.SNOUT) return "SNOUT";

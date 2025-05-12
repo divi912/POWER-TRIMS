@@ -1,6 +1,28 @@
+/*
+ * This file is part of [ POWER TRIMS ].
+ *
+ * [POWER TRIMS] is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * [ POWER TRIMS ] is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Copyright (C) [2025] [ div ].
+ */
+
+
+
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.block.Block;
@@ -26,10 +48,12 @@ public class WildTrim implements Listener {
 
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
+    private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
 
-    public WildTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+    public WildTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
+        this.trustManager = trustManager; // Initialize the Trust Manager
         WildPassive();
     }
 
@@ -65,6 +89,7 @@ public class WildTrim implements Listener {
         Location start = player.getEyeLocation();
         Vector direction = player.getLocation().getDirection().normalize();
         double range = 60.0;
+        Player wildUser = player; // Store the player using the ability
 
         // Play sound effect for grappling hook
         player.playSound(player.getLocation(), Sound.ENTITY_FISHING_BOBBER_THROW, 1.0f, 1.0f);
@@ -76,17 +101,21 @@ public class WildTrim implements Listener {
                 start,
                 direction,
                 range,
-                entity -> entity instanceof LivingEntity && entity != player
+                entity -> entity instanceof LivingEntity && entity != wildUser
         );
 
         if (entityHit != null && entityHit.getHitEntity() instanceof LivingEntity targetEntity) {
-            // Grapple to the entity under the crosshair
-            player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] Grappling to entity!");
-            visualizeGrapple(player, targetEntity.getLocation().add(0, 1, 0));
-            smoothlyPullPlayer(player, targetEntity.getLocation().add(0, 1, 0));
-            targetEntity.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 200, 1, true, false, true));
-            targetEntity.sendMessage(ChatColor.GREEN + "[§cWild§8] You have been Poisoned for 10 sec!");
-            abilityUsed = true;
+            if (targetEntity instanceof Player targetPlayer && trustManager.isTrusted(wildUser.getUniqueId(), targetPlayer.getUniqueId())) {
+                player.sendMessage(ChatColor.YELLOW + "§8[§cWild§8] Cannot grapple trusted player.");
+            } else {
+                // Grapple to the entity under the crosshair
+                player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] Grappling to entity!");
+                visualizeGrapple(player, targetEntity.getLocation().add(0, 1, 0));
+                smoothlyPullPlayer(player, targetEntity.getLocation().add(0, 1, 0));
+                targetEntity.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 200, 1, true, false, true));
+                targetEntity.sendMessage(ChatColor.GREEN + "[§cWild§8] You have been Poisoned for 10 sec!");
+                abilityUsed = true;
+            }
         } else {
             // Grapple to the block under the crosshair if no entity is found
             Block targetBlock = player.getTargetBlockExact((int) range);
@@ -100,29 +129,11 @@ public class WildTrim implements Listener {
                 player.sendMessage(ChatColor.RED + "§8[§cWild§8] No valid target found!");
             }
         }
-        Entity nearestEntity = null;
-
-        if (nearestEntity != null) {
-            // Grapple to the entity
-            player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] Grappling to entity!");
-            visualizeGrapple(player, nearestEntity.getLocation().add(0, 1, 0));
-            smoothlyPullPlayer(player, nearestEntity.getLocation().add(0, 1, 0));
-            abilityUsed = true;
-        } else {
-            // Grapple to the nearest block
-            Block targetBlock = player.getTargetBlockExact((int) range);
-            if (targetBlock != null && !targetBlock.getType().isAir()) {
-                player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] Grappling to block!");
-                visualizeGrapple(player, targetBlock.getLocation().add(0.5, 1, 0.5));
-                smoothlyPullPlayer(player, targetBlock.getLocation().add(0.5, 1, 0.5));
-                abilityUsed = true;
-            }
-        }
 
         // Apply cooldown only if the ability was successfully used
         if (abilityUsed) {
-          cooldownManager.setCooldown(player, TrimPattern.WILD, 20000);
-       }
+            cooldownManager.setCooldown(player, TrimPattern.WILD, 20000);
+        }
     }
 
 
@@ -244,6 +255,9 @@ public class WildTrim implements Listener {
         for (Entity entity : player.getNearbyEntities(5, 3, 5)) {
             if (entity instanceof LivingEntity && entity != player) {
                 LivingEntity target = (LivingEntity) entity;
+                if (target instanceof Player targetPlayer && trustManager.isTrusted(player.getUniqueId(), targetPlayer.getUniqueId())) {
+                    continue; // Skip trusted players
+                }
                 affectedEntities.add(target);
                 frozenEntities.add(target.getUniqueId());
                 spawnVinesAround(target.getLocation());
@@ -321,6 +335,3 @@ public class WildTrim implements Listener {
 
 
 }
-
-
-

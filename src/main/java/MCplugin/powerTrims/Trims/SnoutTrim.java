@@ -1,6 +1,28 @@
+/*
+ * This file is part of [ POWER TRIMS ].
+ *
+ * [POWER TRIMS] is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * [ POWER TRIMS ] is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Copyright (C) [2025] [ div ].
+ */
+
+
+
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -29,6 +51,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SnoutTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
+    private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final NamespacedKey effectKey;
     private static final long ROAR_COOLDOWN = 120000; // 2 minutes
     private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacySection();
@@ -38,9 +61,11 @@ public class SnoutTrim implements Listener {
     private final Scoreboard snoutScoreboard; // Plugin's private scoreboard
     private Team necromancerTeam;
 
-    public SnoutTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+
+    public SnoutTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
+        this.trustManager = trustManager; // Initialize the Trust Manager
         this.summonerKey = new NamespacedKey(plugin, "summoner");
         this.effectKey = new NamespacedKey(plugin, "snout_trim_effect");
         this.snoutScoreboard = Bukkit.getScoreboardManager().getNewScoreboard(); // Initialize the plugin's scoreboard
@@ -157,13 +182,26 @@ public class SnoutTrim implements Listener {
                         LivingEntity currentTarget = skeleton.getTarget();
                         LivingEntity preferredTarget = summonerTargetMap.get(summonerUUID);
                         if (preferredTarget != null && !preferredTarget.equals(summoner)) {
-                            if (preferredTarget instanceof Player ) {
-                                // If preferred target is a trusted player, do nothing.
+                            if (preferredTarget instanceof Player) {
+                                // Check if the preferred target is trusted by the summoner
+                                if (trustManager.isTrusted(summonerUUID, preferredTarget.getUniqueId())) {
+                                    // If trusted, do nothing (don't target)
+                                } else {
+                                    // Update target if not already targeting it
+                                    if (!preferredTarget.equals(currentTarget)) {
+                                        skeleton.setTarget(preferredTarget);
+                                    }
+                                }
                             } else {
-                                // Update target if not already targeting it
+                                // If the preferred target is not a player, target it
                                 if (!preferredTarget.equals(currentTarget)) {
                                     skeleton.setTarget(preferredTarget);
                                 }
+                            }
+                        } else if (currentTarget != null && currentTarget instanceof Player) {
+                            // If currently targeting a player, check if they are trusted
+                            if (trustManager.isTrusted(summonerUUID, currentTarget.getUniqueId())) {
+                                skeleton.setTarget(null); // Stop targeting trusted players
                             }
                         }
                     }
@@ -182,7 +220,7 @@ public class SnoutTrim implements Listener {
             UUID summonerUUID = UUID.fromString(Objects.requireNonNull(skeleton.getPersistentDataContainer().get(summonerKey, PersistentDataType.STRING)));
             Player summoner = Bukkit.getPlayer(summonerUUID);
             if (summoner == null) return;
-            if (target.equals(summoner)) {
+            if (target.equals(summoner) || (target instanceof Player && trustManager.isTrusted(summonerUUID, target.getUniqueId()))) {
                 event.setCancelled(true);
             }
         }

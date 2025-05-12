@@ -1,6 +1,28 @@
+/*
+ * This file is part of [ POWER TRIMS ].
+ *
+ * [POWER TRIMS] is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * [ POWER TRIMS ] is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Copyright (C) [2025] [ div ].
+ */
+
+
+
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.entity.*;
@@ -22,6 +44,7 @@ import java.util.UUID;
 public class SentryTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
+    private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final NamespacedKey effectKey;
     private final Set<UUID> activeGuards;
 
@@ -30,9 +53,10 @@ public class SentryTrim implements Listener {
     private static final int COOLDOWN = 90 * 1000; // 90 seconds
     private static final int PARTICLE_DURATION = 20; // 1 second of particles
 
-    public SentryTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+    public SentryTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
+        this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "sentry_trim_effect");
         this.activeGuards = new HashSet<>();
         SentryPassive();
@@ -62,13 +86,17 @@ public class SentryTrim implements Listener {
 
         Location eyeLoc = player.getEyeLocation();
         World world = player.getWorld();
+        Player sentryUser = player; // Store the player using the ability
 
-        // Find the nearest LivingEntity (excluding the shooter) within 15 blocks
+        // Find the nearest LivingEntity (excluding the shooter and trusted players) within 15 blocks
         double radius = 15;
         LivingEntity nearestTarget = null;
         double nearestDistance = Double.MAX_VALUE;
         for (Entity entity : world.getNearbyEntities(eyeLoc, radius, radius, radius)) {
-            if (entity instanceof LivingEntity && !entity.equals(player)) {
+            if (entity instanceof LivingEntity && !entity.equals(sentryUser)) {
+                if (entity instanceof Player targetPlayer && trustManager.isTrusted(sentryUser.getUniqueId(), targetPlayer.getUniqueId())) {
+                    continue; // Skip trusted players
+                }
                 double distance = entity.getLocation().distance(eyeLoc);
                 if (distance < nearestDistance) {
                     nearestDistance = distance;
@@ -87,7 +115,6 @@ public class SentryTrim implements Listener {
             baseDirection = eyeLoc.getDirection().clone().normalize();
         }
 
-        // Fire spectral arrows in a slightly randomized cone around the base direction
         // Fire spectral arrows in a slightly randomized cone around the base direction
         for (int i = 0; i < ARROW_COUNT; i++) {
             Vector direction = baseDirection.clone();
@@ -129,6 +156,13 @@ public class SentryTrim implements Listener {
         // Check if the arrow has the true damage key
         String shooterUUID = arrow.getPersistentDataContainer().get(new NamespacedKey(plugin, "true_damage_arrow"), PersistentDataType.STRING);
         if (shooterUUID == null) return;
+        Player shooter = Bukkit.getPlayer(UUID.fromString(shooterUUID));
+        if (shooter == null) return;
+
+        // Don't apply true damage to trusted players
+        if (target instanceof Player targetPlayer && trustManager.isTrusted(shooter.getUniqueId(), targetPlayer.getUniqueId())) {
+            return;
+        }
 
         // Cancel vanilla damage
         event.setCancelled(true);

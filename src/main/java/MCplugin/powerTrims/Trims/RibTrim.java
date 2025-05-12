@@ -1,6 +1,29 @@
+/*
+ * This file is part of [ POWER TRIMS ].
+ *
+ * [POWER TRIMS] is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * [ POWER TRIMS ] is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Copyright (C) [2025] [ div ].
+ */
+
+
+
+
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
@@ -26,15 +49,17 @@ import java.util.*;
 public class RibTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
+    private final PersistentTrustManager trustManager; // Import the Trust Manager
     private final NamespacedKey effectKey;
     private static final long RIB_COOLDOWN = 60000; // 1 minute cooldown
 
     private static final Map<UUID, LivingEntity> playerTargetMap = new HashMap<>();
     private static final Map<UUID, List<Mob>> playerBoggedMap = new HashMap<>();
 
-    public RibTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+    public RibTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
+        this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "rib_trim_effect");
         RibPassive();
     }
@@ -66,6 +91,7 @@ public class RibTrim implements Listener {
         World world = player.getWorld();
         UUID ownerUUID = player.getUniqueId();
         NamespacedKey ownerKey = new NamespacedKey(plugin, "owner");
+        Player ribUser = player; // Store the player using the ability
 
         world.playSound(playerLoc, Sound.ENTITY_SKELETON_AMBIENT, 1.0f, 1.0f);
         world.playSound(playerLoc, Sound.BLOCK_BONE_BLOCK_PLACE, 1.0f, 1.2f);
@@ -98,13 +124,18 @@ public class RibTrim implements Listener {
                 // Immediately try to set the target if the player has recently attacked something
                 LivingEntity currentTarget = playerTargetMap.get(ownerUUID);
                 if (currentTarget != null && currentTarget.isValid() && !currentTarget.equals(player)) {
-                    mob.setTarget(currentTarget);
-                    // Optionally, make them look at the target immediately
-                    Location current = boggedEntity.getLocation();
-                    Vector direction = currentTarget.getLocation().toVector().subtract(current.toVector());
-                    if (!direction.equals(new Vector(0, 0, 0))) {
-                        current.setDirection(direction);
-                        boggedEntity.teleport(current);
+                    if (currentTarget instanceof Player targetPlayer && trustManager.isTrusted(ribUser.getUniqueId(), targetPlayer.getUniqueId())) {
+                        currentTarget = null; // Don't target trusted players
+                    }
+                    if (currentTarget != null) {
+                        mob.setTarget(currentTarget);
+                        // Optionally, make them look at the target immediately
+                        Location current = boggedEntity.getLocation();
+                        Vector direction = currentTarget.getLocation().toVector().subtract(current.toVector());
+                        if (!direction.equals(new Vector(0, 0, 0))) {
+                            current.setDirection(direction);
+                            boggedEntity.teleport(current);
+                        }
                     }
                 }
 
@@ -118,6 +149,10 @@ public class RibTrim implements Listener {
                         }
                         LivingEntity target = playerTargetMap.get(ownerUUID);
                         if (target != null && target.isValid() && !target.equals(player)) {
+                            if (target instanceof Player targetPlayer && trustManager.isTrusted(ribUser.getUniqueId(), targetPlayer.getUniqueId())) {
+                                mob.setTarget(null); // Don't target trusted players
+                                return;
+                            }
                             if (target.getType() == EntityType.BOGGED &&
                                     ownerUUID.toString().equals(target.getPersistentDataContainer().get(ownerKey, PersistentDataType.STRING))) {
                                 return;
@@ -192,11 +227,17 @@ public class RibTrim implements Listener {
     public void onPlayerAttack(EntityDamageByEntityEvent event) {
         if (event.getDamager() instanceof Player player && event.getEntity() instanceof LivingEntity target) {
             UUID ownerUUID = player.getUniqueId();
+            Player ribUser = player;
+
+            if (target instanceof Player targetPlayer && trustManager.isTrusted(ribUser.getUniqueId(), targetPlayer.getUniqueId())) {
+                playerTargetMap.remove(ownerUUID); // Don't set trusted players as target
+                return;
+            }
 
             if (target.getType() == EntityType.BOGGED) {
                 String targetOwner = target.getPersistentDataContainer().get(new NamespacedKey(plugin, "owner"), PersistentDataType.STRING);
                 if (targetOwner != null && targetOwner.equals(ownerUUID.toString())) {
-                    return;
+                    return; // Don't target own summoned entities
                 }
             }
 
@@ -205,6 +246,9 @@ public class RibTrim implements Listener {
             if (playerBoggedMap.containsKey(ownerUUID)) {
                 for (Mob bogged : playerBoggedMap.get(ownerUUID)) {
                     if (bogged.isValid() && target.isValid() && !target.equals(player)) {
+                        if (target instanceof Player targetPlayer && trustManager.isTrusted(ribUser.getUniqueId(), targetPlayer.getUniqueId())) {
+                            continue; // Don't target trusted players
+                        }
                         bogged.setTarget(target);
                     }
                 }
@@ -217,15 +261,23 @@ public class RibTrim implements Listener {
         if (event.getEntity() instanceof Mob bogged && bogged.getType() == EntityType.BOGGED) {
             String ownerUUID = bogged.getPersistentDataContainer().get(new NamespacedKey(plugin, "owner"), PersistentDataType.STRING);
             if (ownerUUID == null) return;
+            Player owner = Bukkit.getPlayer(UUID.fromString(ownerUUID));
+            if (owner == null) return;
+
+            if (event.getTarget() instanceof Player target && trustManager.isTrusted(owner.getUniqueId(), target.getUniqueId())) {
+                event.setCancelled(true); // Don't target trusted players
+                return;
+            }
 
             if (event.getTarget() instanceof Player target && target.getUniqueId().toString().equals(ownerUUID)) {
-                event.setCancelled(true);
+                event.setCancelled(true); // Don't target owner
+                return;
             }
 
             if (event.getTarget() instanceof Mob targetMob && targetMob.getType() == EntityType.BOGGED) {
                 String targetOwner = targetMob.getPersistentDataContainer().get(new NamespacedKey(plugin, "owner"), PersistentDataType.STRING);
                 if (targetOwner != null && targetOwner.equals(ownerUUID)) {
-                    event.setCancelled(true);
+                    event.setCancelled(true); // Don't target other owned entities
                 }
             }
         }

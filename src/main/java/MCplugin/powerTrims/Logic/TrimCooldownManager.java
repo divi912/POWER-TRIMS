@@ -1,3 +1,24 @@
+/*
+ * This file is part of [ POWER TRIMS ].
+ *
+ * [POWER TRIMS] is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * [ POWER TRIMS ] is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Copyright (C) [2025] [ div ].
+ */
+
+
+
 package MCplugin.powerTrims.Logic;
 
 import net.kyori.adventure.text.Component;
@@ -16,7 +37,6 @@ public class TrimCooldownManager {
     private final ScoreboardManager scoreboardManager;
     private final DataManager dataManager;
     private final DisplayMode displayMode;
-    private Scoreboard scoreboard; // Store the scoreboard object
 
     public enum DisplayMode { SCOREBOARD, ACTION_BAR, NONE }
 
@@ -25,7 +45,6 @@ public class TrimCooldownManager {
         this.scoreboardManager = Bukkit.getScoreboardManager();
         this.dataManager = ((MCplugin.powerTrims.PowerTrimss) plugin).getDataManager();
 
-        // Read mode from config
         FileConfiguration config = plugin.getConfig();
         String mode = config.getString("cooldown-display", "ACTION_BAR").toUpperCase();
         DisplayMode loadedMode;
@@ -36,7 +55,6 @@ public class TrimCooldownManager {
             loadedMode = DisplayMode.ACTION_BAR;
         }
         this.displayMode = loadedMode;
-        this.scoreboard = scoreboardManager.getNewScoreboard(); // Initialize the scoreboard
 
         new BukkitRunnable() {
             @Override
@@ -51,7 +69,7 @@ public class TrimCooldownManager {
             switch (displayMode) {
                 case SCOREBOARD -> showScoreboard(player);
                 case ACTION_BAR -> showActionBar(player);
-                case NONE -> showScoreboard(player);// Do nothing
+                case NONE -> {} // Do nothing
             }
         }
     }
@@ -70,14 +88,18 @@ public class TrimCooldownManager {
 
     private void showScoreboard(Player player) {
         TrimPattern equippedTrim = ArmourChecking.getEquippedTrim(player);
-        Scoreboard board = scoreboardManager.getNewScoreboard();
+        Scoreboard board = player.getScoreboard();
+
+        if (board == null) return; // Safeguard — in practice, all players should have a scoreboard
+
+        // Remove previous objective if exists
+        Objective old = board.getObjective("TrimCooldown");
+        if (old != null) old.unregister();
+
         Objective obj = board.registerNewObjective("TrimCooldown", "dummy", ChatColor.GOLD + "❖ " + ChatColor.BOLD + "Trim Status" + ChatColor.RESET + ChatColor.GOLD + " ❖");
         obj.setDisplaySlot(DisplaySlot.SIDEBAR);
 
-        // Decorative full-width top line (hidden color codes for uniqueness)
         obj.getScore(ChatColor.GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + ChatColor.DARK_GRAY).setScore(9);
-
-        // Trim pattern section
         obj.getScore(ChatColor.YELLOW + "⚔ " + ChatColor.BOLD + "Trim Power" + ChatColor.YELLOW + " ⚔ :").setScore(8);
 
         if (equippedTrim != null) {
@@ -86,10 +108,8 @@ public class TrimCooldownManager {
             obj.getScore(ChatColor.RED + "  ✧ No Power").setScore(7);
         }
 
-        // Blank line for spacing
         obj.getScore(ChatColor.RESET + " ").setScore(6);
 
-        // Cooldown status
         if (equippedTrim != null) {
             long cooldownTime = getRemainingCooldown(player, equippedTrim) / 1000;
             String cooldownText = (cooldownTime > 0)
@@ -100,19 +120,11 @@ public class TrimCooldownManager {
             obj.getScore(ChatColor.YELLOW + "⚡ " + ChatColor.BOLD + "Status: " + ChatColor.GRAY + "None").setScore(5);
         }
 
-        // Another blank line for spacing
         obj.getScore(ChatColor.RESET + "  ").setScore(4);
-
-        // Decorative full-width bottom line (slightly different for uniqueness)
         obj.getScore(ChatColor.GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + ChatColor.BLACK).setScore(3);
-
-        // Stylish Credit Line
         obj.getScore(ChatColor.DARK_RED+ "         Created by " + ChatColor.RED + "div").setScore(2);
         obj.getScore(ChatColor.DARK_GRAY + "     ⚡ " + ChatColor.GOLD + ChatColor.BOLD + " POWER TRIMS" + ChatColor.DARK_GRAY + " ⚡").setScore(1);
-
-        player.setScoreboard(board);
     }
-
     /** Sets a cooldown for a specific TrimPattern */
     public void setCooldown(Player player, TrimPattern trim, long cooldownMillis) {
         long expiry = System.currentTimeMillis() + cooldownMillis;

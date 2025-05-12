@@ -1,6 +1,28 @@
+/*
+ * This file is part of [ POWER TRIMS ].
+ *
+ * [POWER TRIMS] is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * [ POWER TRIMS ] is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Copyright (C) [2025] [ div ].
+ */
+
+
+
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
@@ -24,6 +46,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class HostTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
+    private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final NamespacedKey effectKey;
     private static final long ESSENCE_REAPER_COOLDOWN = 120000; // 2 minutes cooldown
     private static final double EFFECT_STEAL_RADIUS = 10.0;
@@ -32,9 +55,10 @@ public class HostTrim implements Listener {
     private final Map<PotionEffectType, Player> effectOwners = new ConcurrentHashMap<>();
 
 
-    public HostTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+    public HostTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
+        this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "host_trim_effect");
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
@@ -60,19 +84,23 @@ public class HostTrim implements Listener {
 
         World world = player.getWorld();
         Location playerLoc = player.getLocation();
+        Player hostUser = player; // Store the player using the ability
 
         // Initialize the set of stolen effects if it's not already initialized
         stolenEffects.putIfAbsent(player, new HashSet<>());
 
         // For each nearby player, steal positive potion effects and health
         for (Entity entity : world.getNearbyEntities(playerLoc, EFFECT_STEAL_RADIUS, EFFECT_STEAL_RADIUS, EFFECT_STEAL_RADIUS)) {
-            if (entity instanceof Player targetPlayer && !targetPlayer.equals(player)) {
+            if (entity instanceof Player targetPlayer && !targetPlayer.equals(hostUser)) {
+                if (trustManager.isTrusted(hostUser.getUniqueId(), targetPlayer.getUniqueId())) {
+                    continue; // Skip trusted players
+                }
                 Collection<PotionEffect> effects = targetPlayer.getActivePotionEffects();
                 for (PotionEffect effect : effects) {
                     PotionEffectType type = effect.getType();
                     if (isPositiveEffect(type) && !stolenEffects.get(player).contains(type)) {
                         // Prevent the player from stealing back an effect they had stolen from them
-                        if (effectOwners.containsKey(type) && effectOwners.get(type).equals(player)) {
+                        if (effectOwners.containsKey(type) && effectOwners.get(type).equals(hostUser)) {
                             continue; // Don't allow stealing back their own effect
                         }
 

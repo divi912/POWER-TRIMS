@@ -25,15 +25,22 @@ package MCplugin.powerTrims;
 
 import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.Trims.*;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.util.UUID;
+
 public final class PowerTrimss extends JavaPlugin implements Listener {
     private TrimCooldownManager cooldownManager;
     private DataManager dataManager;
+    private PersistentTrustManager trustManager;
 
     @Override
     public void onEnable() {
@@ -44,6 +51,12 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         getLogger().info(ChatColor.GOLD + "   Thanks for using PowerTrims!");
         getLogger().info(ChatColor.AQUA + "   Made by " + ChatColor.BOLD + "div");
         getLogger().info(ChatColor.GREEN + "--------------------------------------");
+
+        trustManager = new PersistentTrustManager(this);
+
+        // Register commands
+        getCommand("trust").setExecutor(this);
+        getCommand("untrust").setExecutor(this);
 
 
 
@@ -61,23 +74,70 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
     }
 
     private void registerTrimAbilities() {
-        getServer().getPluginManager().registerEvents(new SilenceTrim(this, cooldownManager), this);
-        getServer().getPluginManager().registerEvents(new WildTrim(this, cooldownManager), this);
-        getServer().getPluginManager().registerEvents(new VexTrim(this, cooldownManager), this);
-        getServer().getPluginManager().registerEvents(new TideTrim(this, cooldownManager), this);
-        getServer().getPluginManager().registerEvents(new EyeTrim(this, cooldownManager), this);
-        getServer().getPluginManager().registerEvents(new RibTrim(this, cooldownManager), this);
+        getServer().getPluginManager().registerEvents(new SilenceTrim(this, cooldownManager, trustManager), this);
+        getServer().getPluginManager().registerEvents(new WildTrim(this, cooldownManager, trustManager), this);
+        getServer().getPluginManager().registerEvents(new VexTrim(this, cooldownManager, trustManager), this);
+        getServer().getPluginManager().registerEvents(new TideTrim(this, cooldownManager, trustManager), this);
+        getServer().getPluginManager().registerEvents(new EyeTrim(this, cooldownManager, trustManager), this);
+        getServer().getPluginManager().registerEvents(new RibTrim(this, cooldownManager, trustManager), this);
         getServer().getPluginManager().registerEvents(new FlowTrim(this, cooldownManager), this);
-        getServer().getPluginManager().registerEvents(new CoastTrim(this, cooldownManager), this);
-        getServer().getPluginManager().registerEvents(new DuneTrim(this, cooldownManager), this);
-        getServer().getPluginManager().registerEvents(new SentryTrim(this, cooldownManager), this);
+        getServer().getPluginManager().registerEvents(new CoastTrim(this, cooldownManager, trustManager), this);
+        getServer().getPluginManager().registerEvents(new DuneTrim(this, cooldownManager, trustManager), this);
+        getServer().getPluginManager().registerEvents(new SentryTrim(this, cooldownManager, trustManager), this);
         getServer().getPluginManager().registerEvents(new WayfinderTrim(this, cooldownManager), this);
-        getServer().getPluginManager().registerEvents(new RaiserTrim(this, cooldownManager), this);
-        getServer().getPluginManager().registerEvents(new WardTrim(this, cooldownManager), this);
-        getServer().getPluginManager().registerEvents(new SpireTrim(this, cooldownManager), this);
-        getServer().getPluginManager().registerEvents(new HostTrim(this, cooldownManager), this);
-        getServer().getPluginManager().registerEvents(new SnoutTrim(this, cooldownManager), this);
+        getServer().getPluginManager().registerEvents(new RaiserTrim(this, cooldownManager, trustManager), this);
+        getServer().getPluginManager().registerEvents(new WardTrim(this, cooldownManager, trustManager), this);
+        getServer().getPluginManager().registerEvents(new SpireTrim(this, cooldownManager, trustManager), this);
+        getServer().getPluginManager().registerEvents(new HostTrim(this, cooldownManager, trustManager), this);
+        getServer().getPluginManager().registerEvents(new SnoutTrim(this,cooldownManager, trustManager), this);
     }
+
+    //trust command
+
+    @Override
+    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (sender instanceof Player) {
+            Player player = (Player) sender;
+
+            if (command.getName().equalsIgnoreCase("trust")) {
+                if (args.length == 1) {
+                    String targetName = args[0];
+                    Player targetPlayer = Bukkit.getPlayer(targetName);
+                    if (targetPlayer != null) {
+                        trustManager.trustPlayer(player.getUniqueId(), targetPlayer.getUniqueId(), sender);
+                    } else {
+                        sender.sendMessage(ChatColor.RED + "Player not found.");
+                    }
+                } else {
+                    return false; // Invalid number of arguments
+                }
+                return true;
+
+            } else if (command.getName().equalsIgnoreCase("untrust")) {
+                if (args.length == 1) {
+                    String targetName = args[0];
+                    Player targetPlayer = Bukkit.getPlayer(targetName);
+                    if (targetPlayer != null) {
+                        trustManager.untrustPlayer(player.getUniqueId(), targetPlayer.getUniqueId(), sender);
+                    } else {
+                        sender.sendMessage(ChatColor.RED + "Player not found.");
+                    }
+                } else {
+                    return false; // Invalid number of arguments
+                }
+                return true;
+
+            } else if (command.getName().equalsIgnoreCase("trustlist")) {
+                trustManager.showTrustList(player.getUniqueId(), sender);
+                return true;
+            }
+        } else {
+            sender.sendMessage(ChatColor.RED + "This command can only be used by players.");
+        }
+        return true;
+    }
+
+
 
 
     @EventHandler
@@ -89,6 +149,10 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+
+        if (trustManager != null) {
+            trustManager.saveTrusts();
+        }
 
         // Stylish shutdown message
         getLogger().info(ChatColor.RED + "--------------------------------------");

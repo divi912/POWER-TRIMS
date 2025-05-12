@@ -1,6 +1,28 @@
+/*
+ * This file is part of [ POWER TRIMS ].
+ *
+ * [POWER TRIMS] is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * [ POWER TRIMS ] is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Copyright (C) [2025] [ div ].
+ */
+
+
+
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.PersistentTrustManager; // Import the Trust Manager
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
@@ -19,14 +41,16 @@ import org.bukkit.util.Vector;
 public class DuneTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
+    private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final NamespacedKey effectKey;
     private static final int SANDSTORM_RADIUS = 12;
     private static final int SANDSTORM_DAMAGE = 6; // 3 Hearts
     private static final long SANDSTORM_COOLDOWN = 60000; // 1 minutes
 
-    public DuneTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+    public DuneTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
+        this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "dune_trim_effect");
         DunePassive();
     }
@@ -94,6 +118,7 @@ public class DuneTrim implements Listener {
 
         Location playerLoc = player.getLocation();
         World world = player.getWorld();
+        Player duneUser = player; // Store the player using the ability
 
         // Play sound effects for activation
         world.playSound(playerLoc, Sound.ENTITY_PLAYER_BREATH, 1.0f, 0.8f);
@@ -108,7 +133,10 @@ public class DuneTrim implements Listener {
         world.spawnParticle(Particle.CLOUD, playerLoc.clone().add(0, 1.5, 0), 60, 1.0, 0.6, 1.0, 0.1);
 
         for (Entity entity : world.getNearbyEntities(playerLoc, SANDSTORM_RADIUS, SANDSTORM_RADIUS, SANDSTORM_RADIUS)) {
-            if (entity instanceof LivingEntity target && !target.equals(player)) {
+            if (entity instanceof LivingEntity target && !target.equals(duneUser)) {
+                if (target instanceof Player targetPlayer && trustManager.isTrusted(duneUser.getUniqueId(), targetPlayer.getUniqueId())) {
+                    continue; // Skip trusted players
+                }
                 Location targetLoc = target.getLocation();
                 Vector knockbackDirection = targetLoc.toVector().subtract(playerLoc.toVector()).normalize().multiply(1.5);
                 knockbackDirection.add(new Vector(0, 0.5, 0));
