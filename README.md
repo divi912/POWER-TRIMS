@@ -1,30 +1,64 @@
-# Power Trims ✨
+# ✨ Power Trims ✨
 
-**Empowering Armor Trims in Minecraft** ⛏️
 
-Power Trims is a Minecraft plugin that imbues almost every armor trim in the game with unique and powerful abilities, enhancing gameplay and adding new layers to combat and exploration. ⚔️
 
-## Features
+## 🌟 Features 🌟
 
-* **Empowering Armor Trims:** Imbues almost every armor trim in the game with unique and powerful abilities. 💪
-* **Customizable Gameplay:** Introduces new strategic layers to combat and exploration by leveraging the special effects of different trims. ⚙️
-* **Wiki for Detailed Information:** Provides a comprehensive wiki (link to be added) where players can find in-depth descriptions of each trim's power, usage, and any associated mechanics. 📖
+| Feature                    | Description                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| Unique Powers            | ✨ Unique and Fun Powers For Each Trimmed Armor Set                             |
+| Performance                | ⚡ Fast and Optimized                                                            |
+| Compatibility            | ✅ Paper, Spigot, And Bukkit Support                                            |
+| Crossplay Support          | 🛏️ Bedrock Support (Via Crossplay)                                            |
 
-## Installation
 
-1.  **Download the Plugin:** Obtain the latest `.jar` file of the Power Trims plugin. ⬇️
-2.  **Place in Plugins Folder:** Navigate to your Minecraft server directory and locate the `plugins` folder. Drag and drop the Power Trims `.jar` file into this folder. 📂
-3.  **Restart Server:** Start or restart your Minecraft server. The plugin will automatically load upon startup. 🔄
 
-## Configuration
+## ❓ FAQ ❓
 
-* you can change the cooldown display mode in the config.yml. ✅
+#### 🤔 How Do I Use the Abilities?
 
-## Support
+>   Shift + 9 (Move To the Ninth Hotbar Slot.)
 
-* i will make a discord server if this project gets remotly popular(i hope) 💬
+#### ❓ How Many Trims Have Abilities?
 
-## License
+>   Every Single Vanilla Trim (except bolt and shaper, will be coming soon)
 
-* GPL-3.0 license📜
+#### 🛠️ Do you Support Modded Trims / Are Planning To?
 
+>   No, but i am planning to add support for Forge and Fabric if people want it.
+
+
+
+## 🚀 Installation 🚀
+
+Download [PowerTrims](https://example.com) And Add it into your Plugins' Folder on your Server
+
+Restart, and Have Fun! 🎉
+
+
+## 👨‍💻 Authors 👨‍💻
+
+* 👤 [@divi912](https://www.github.com/divi912)
+
+
+## ℹ️ More Help / Info ℹ️
+
+View PowerTrims [Wiki](https://example.com)
+
+Our Wiki is For Developers, and Server Owners
+To Help setup, and Develop new Features.
+
+**PowerTrims Discord Coming Soon.** 💬
+
+
+## 🤝 Contributing 🤝
+
+🤝 Contributing Is Currently Closed as of Now, We might open it in the late future.
+Until Then, feel free to submit Pull Requests and Bug Reports. 🐛
+
+
+
+## 📜 License 📜
+
+📜 [GPLV3](https://github.com/divi912/POWER-TRIMS/blob/main/LICENSE)
+We use GNU General Public License v3.0 (GPLV3)
