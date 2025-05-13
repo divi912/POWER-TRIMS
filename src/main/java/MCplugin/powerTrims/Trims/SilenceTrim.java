@@ -59,7 +59,7 @@ public class SilenceTrim implements Listener {
     private static final int POTION_DURATION = 300; // 15 seconds
     private static final int PEARL_COOLDOWN = 200; // 10 seconds
     private static final double ECHO_RADIUS = 6.0;
-    private static final int ECHO_EFFECT_DURATION = 60; // 3 seconds
+    private static final int ECHO_EFFECT_DURATION = 300; //
     private static final int MAX_AFFECTED_ENTITIES = 30;
 
     public SilenceTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
@@ -234,6 +234,7 @@ public class SilenceTrim implements Listener {
         }
 
         player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, ECHO_EFFECT_DURATION, 1, false, false, true));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, ECHO_EFFECT_DURATION, 1, false, false, true));
         player.sendMessage("§8[§cSilence§8] §7Your armor has unleashed " + ChatColor.BOLD + "§cWarden's Echo!");
         setWardensEchoCooldown(player);
     }
