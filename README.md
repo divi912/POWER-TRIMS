@@ -9,7 +9,7 @@
 | Unique Powers            | ✨ Unique and Fun Powers For Each Trimmed Armor Set                             |
 | Performance                | ⚡ Fast and Optimized                                                            |
 | Compatibility            | ✅ Paper, Spigot, And Bukkit Support                                            |
-| Crossplay Support          | 🛏️ Bedrock Support (Via Crossplay)                                            |
+| Crossplay Support          | 🛏️ Bedrock Support (Via Geyser) coming soon!                                            |
 
 
 
