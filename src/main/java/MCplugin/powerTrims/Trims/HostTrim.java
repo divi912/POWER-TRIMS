@@ -25,11 +25,10 @@ import MCplugin.powerTrims.Logic.ArmourChecking;
 import MCplugin.powerTrims.Logic.PersistentTrustManager; 
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.Player;
+import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -64,11 +63,26 @@ public class HostTrim implements Listener {
     }
 
     @EventHandler
-    public void HostPassive(EntityDamageEvent event) {
-        if (event.getEntity() instanceof Player player) {
-            if (event.getCause() == EntityDamageEvent.DamageCause.FALL &&
-                    ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.HOST)) {
-                event.setCancelled(true);
+    public void onEntityTarget(EntityTargetLivingEntityEvent event) {
+        if (!(event.getTarget() instanceof Player targetPlayer)) {
+            return;
+        }
+
+        LivingEntity attacker = (LivingEntity) event.getEntity();
+        if (!(attacker instanceof Mob mob)) {
+            return;
+        }
+
+        // Check if the target player is wearing full Host Trim armor
+        if (ArmourChecking.hasFullTrimmedArmor(targetPlayer, TrimPattern.HOST)) {
+            EntityType attackerType = attacker.getType();
+
+            // Check if the attacker is NOT a boss mob
+            if (attackerType != EntityType.WARDEN &&
+                    attackerType != EntityType.ENDER_DRAGON &&
+                    attackerType != EntityType.WITHER) {
+                event.setCancelled(true); // Cancel the targeting
+                mob.setTarget(null); // Optionally, clear the mob's current target
             }
         }
     }

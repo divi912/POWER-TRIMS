@@ -71,34 +71,6 @@ public class WardTrim implements Listener {
     }
 
 
-    @EventHandler
-    public void onEntityDamage(EntityDamageByEntityEvent event) {
-        if (event.getEntity() instanceof Player player) {
-            if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.HOST)) {
-                Entity attacker = event.getDamager();
-
-                if (attacker instanceof LivingEntity) {
-                    if (attacker instanceof Player attackingPlayer && trustManager.isTrusted(player.getUniqueId(), attackingPlayer.getUniqueId())) {
-                        return; // Don't apply knockback to trusted players
-                    }
-                    // Apply knockback effect
-                    Vector knockbackDirection = attacker.getLocation().toVector()
-                            .subtract(player.getLocation().toVector()).normalize().multiply(1.5);
-                    knockbackDirection.setY(0.5); // Add slight vertical knockback
-
-                    attacker.setVelocity(knockbackDirection);
-
-                    // Optionally cancel the damage or reduce it
-                    event.setCancelled(true);
-
-                    // Play a sound or particles for effect
-                    player.getWorld().playSound(player.getLocation(), Sound.ENTITY_SHULKER_SHOOT, 1.0f, 1.2f);
-                    player.getWorld().spawnParticle(Particle.WITCH, player.getLocation(), 10, 0.5, 0.5, 0.5, 0.1);
-                }
-            }
-        }
-    }
-
     private void WardPassive() {
         Bukkit.getScheduler().runTaskTimer(plugin, () -> {
             for (Player player : Bukkit.getOnlinePlayers()) {

@@ -150,8 +150,8 @@ public class DuneTrim implements Listener {
             }
         }
 
-        player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 1200, 1));
-        player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 1200, 1));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 600, 1));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 600, 1));
 
         cooldownManager.setCooldown(player, TrimPattern.DUNE, SANDSTORM_COOLDOWN);
         player.sendMessage("§8[§6Dune§8] §7You have unleashed a " + ChatColor.GOLD + "Sandstorm" + ChatColor.GRAY + "!");

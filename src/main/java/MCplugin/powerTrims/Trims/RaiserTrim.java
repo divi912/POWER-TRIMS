@@ -43,7 +43,6 @@ public class RaiserTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
-    private final NamespacedKey effectKey;
     private static final long SURGE_COOLDOWN = 120000; // 2 minutes cooldown
     private static final double ENTITY_PULL_RADIUS = 15.0;
     private static final double PLAYER_UPWARD_BOOST = 1.5;
@@ -51,27 +50,17 @@ public class RaiserTrim implements Listener {
     public RaiserTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
-        this.trustManager = trustManager; // Initialize the Trust Manager
-        this.effectKey = new NamespacedKey(plugin, "raiser_trim_effect");
-        RaiserPassive();
+        this.trustManager = trustManager; // Initialize the Trust Manager;
     }
 
-    // Passive Ability: Ascended Ward
-    private void RaiserPassive() {
-        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.RAISER)) {
-                    Location auraLoc = player.getLocation().clone().add(0, player.getEyeHeight() / 2, 0);
-                    player.getWorld().spawnParticle(Particle.WITCH, auraLoc, 15, 0.5, 0.5, 0.5, 0.05);
-                    player.getWorld().spawnParticle(Particle.CLOUD, auraLoc, 10, 0.5, 0.5, 0.5, 0.05);
-                    player.getPersistentDataContainer().set(effectKey, PersistentDataType.BYTE, (byte) 1);
-                } else {
-                    if (player.getPersistentDataContainer().has(effectKey, PersistentDataType.BYTE)) {
-                        player.getPersistentDataContainer().remove(effectKey);
-                    }
-                }
+    @EventHandler
+    public void RaiserPassive(EntityDamageEvent event) {
+        if (event.getEntity() instanceof Player player) {
+            if (event.getCause() == EntityDamageEvent.DamageCause.FALL &&
+                    ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.RAISER)) {
+                event.setCancelled(true);
             }
-        }, 0L, 10L);
+        }
     }
 
     // Primary Ability:
