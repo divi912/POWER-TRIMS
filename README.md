@@ -41,12 +41,12 @@ Restart, and Have Fun! 🎉
 * 👤 [@divi912](https://www.github.com/divi912)
 
 
-## ℹ️ More Help / Info ℹ️
+## ℹ️ Wiki / Info ℹ️
 
-View PowerTrims [Wiki](https://example.com)
+View PowerTrims [Wiki](https://github.com/divi912/POWER-TRIMS/wiki)
 
-Our Wiki is For Developers, and Server Owners
-To Help setup, and Develop new Features.
+Our Wiki is For Users to See the ability Discriptions of
+all current trims.
 
 **PowerTrims Discord Coming Soon.** 💬
 
