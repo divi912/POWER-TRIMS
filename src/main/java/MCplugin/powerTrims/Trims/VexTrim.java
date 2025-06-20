@@ -61,52 +61,22 @@ public class VexTrim implements Listener {
         instance = this;
         Bukkit.getPluginManager().registerEvents(this, plugin);
 
-        VexPassive();
     }
 
     public static VexTrim getInstance() {
         return instance;
     }
 
-    private void VexPassive() {
-        if (passiveTask != null) {
-            passiveTask.cancel();
-        }
-
-        passiveTask = new BukkitRunnable() {
-            @Override
-            public void run() {
-                for (Player player : Bukkit.getOnlinePlayers()) {
-                    try {
-                        NamespacedKey effectKey = new NamespacedKey(plugin, "vex_trim_effect");
-                        if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.VEX)) {
-                            if (!player.hasPotionEffect(PotionEffectType.SPEED)) {
-                                player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, Integer.MAX_VALUE, 1, true, false, true));
-                                player.getPersistentDataContainer().set(effectKey, PersistentDataType.BYTE, (byte) 2);
-                            }
-                        } else if (player.getPersistentDataContainer().has(effectKey, PersistentDataType.BYTE)) {
-                            player.removePotionEffect(PotionEffectType.SPEED);
-                            player.getPersistentDataContainer().remove(effectKey);
-                        }
-                    } catch (Exception e) {
-                        plugin.getLogger().warning("Error in VexPassive for player " + player.getName() + ": " + e.getMessage());
-                    }
-                }
-            }
-        };
-        passiveTask.runTaskTimer(plugin, 0L, 20L);
-        activeTasks.add(passiveTask);
-    }
 
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
         Player player = event.getPlayer();
         if (player.isSneaking() && event.getNewSlot() == 8) {
-            activateVexsVengeance(player);
+            VexPrimary(player);
         }
     }
 
-    private void activateVexsVengeance(Player player) {
+    public void VexPrimary(Player player) {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.VEX)) return;
         if (cooldownManager.isOnCooldown(player, TrimPattern.VEX)) return;
 

@@ -11,8 +11,6 @@ import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
@@ -42,28 +40,12 @@ public class FlowTrim implements Listener {
         this.cooldownManager = cooldownManager;
         this.effectKey = new NamespacedKey(plugin, "flow_trim_effect");
         this.dashEndFallImmunityKey = new NamespacedKey(plugin, "flow_trim_dash_end_immune");
-        FlowPassive();
+
     }
 
-    private void FlowPassive() {
-        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.FLOW)) {
-                    if (!player.hasPotionEffect(PotionEffectType.SPEED)) {
-                        player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, Integer.MAX_VALUE, 1, true, false, true));
-                        player.getPersistentDataContainer().set(effectKey, PersistentDataType.BYTE, (byte) 1);
-                    }
-                } else {
-                    if (player.getPersistentDataContainer().has(effectKey, PersistentDataType.BYTE)) {
-                        player.removePotionEffect(PotionEffectType.SPEED);
-                        player.getPersistentDataContainer().remove(effectKey);
-                    }
-                }
-            }
-        }, 0L, 20L);
-    }
 
-    public void toggleDash(Player player) {
+
+    public void FlowPrimary(Player player) {
         UUID id = player.getUniqueId();
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.FLOW)) return;
 
@@ -153,7 +135,7 @@ public class FlowTrim implements Listener {
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
         Player player = event.getPlayer();
         if (player.isSneaking() && event.getNewSlot() == 8) {
-            toggleDash(player);
+            FlowPrimary(player);
         }
     }
 

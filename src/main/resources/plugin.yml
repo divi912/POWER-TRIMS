@@ -3,6 +3,7 @@ version: '1.0'
 main: MCplugin.powerTrims.PowerTrimss
 api-version: '1.21'
 author: div
+
 commands:
   trust:
     description: Trust a player, preventing your abilities from affecting them.
@@ -13,3 +14,4 @@ commands:
   trustlist:
     description: View your list of trusted players.
     usage: /<command>
+

@@ -57,27 +57,8 @@ public class CoastTrim implements Listener {
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "coast_trim_effect");
-        CoastPassive(); // Start the passive effect scheduler
     }
 
-    // Applies Dolphins Grace to players wearing full Coast-trimmed armor and removes it when not
-    private void CoastPassive() {
-        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.COAST)) {
-                    if (!player.hasPotionEffect(PotionEffectType.DOLPHINS_GRACE)) {
-                        player.addPotionEffect(new PotionEffect(PotionEffectType.DOLPHINS_GRACE, Integer.MAX_VALUE, 0, true, false, true));
-                        player.getPersistentDataContainer().set(effectKey, PersistentDataType.BYTE, (byte) 1);
-                    }
-                } else {
-                    if (player.getPersistentDataContainer().has(effectKey, PersistentDataType.BYTE)) {
-                        player.removePotionEffect(PotionEffectType.DOLPHINS_GRACE);
-                        player.getPersistentDataContainer().remove(effectKey);
-                    }
-                }
-            }
-        }, 0L, 20L); // Run every second
-    }
 
     // Activates the Coast Trim ability: Water Burst
     public void CoastPrimary(Player player) {

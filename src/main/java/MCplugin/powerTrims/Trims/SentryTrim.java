@@ -58,26 +58,8 @@ public class SentryTrim implements Listener {
         this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "sentry_trim_effect");
         this.activeGuards = new HashSet<>();
-        SentryPassive();
     }
 
-    private void SentryPassive() {
-        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.SENTRY)) {
-                    if (!player.hasPotionEffect(PotionEffectType.RESISTANCE)) {
-                        player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, Integer.MAX_VALUE, 0, true, false, true));
-                        player.getPersistentDataContainer().set(effectKey, PersistentDataType.BYTE, (byte) 1);
-                    }
-                } else {
-                    if (player.getPersistentDataContainer().has(effectKey, PersistentDataType.BYTE)) {
-                        player.removePotionEffect(PotionEffectType.RESISTANCE);
-                        player.getPersistentDataContainer().remove(effectKey);
-                    }
-                }
-            }
-        }, 0L, 20L);
-    }
 
     public void SentryPrimary(Player player) {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.SENTRY) ||

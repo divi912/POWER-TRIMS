@@ -19,6 +19,7 @@
     <build>
         <defaultGoal>clean package</defaultGoal>
         <plugins>
+            <!-- Compiler Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -28,10 +29,20 @@
                     <target>${java.version}</target>
                 </configuration>
             </plugin>
+
+            <!-- Shade Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
                 <version>3.5.3</version>
+                <configuration>
+                    <relocations>
+                        <relocation>
+                            <pattern>com.jeff_media.armorequipevent</pattern>
+                            <shadedPattern>MCplugin.powerTrims.shaded.armorequipevent</shadedPattern>
+                        </relocation>
+                    </relocations>
+                </configuration>
                 <executions>
                     <execution>
                         <phase>package</phase>
@@ -41,7 +52,12 @@
                     </execution>
                 </executions>
             </plugin>
+
+
+
         </plugins>
+
+        <!-- Include resources like plugin.yml -->
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
@@ -49,6 +65,7 @@
             </resource>
         </resources>
     </build>
+
 
     <repositories>
         <repository>
@@ -59,6 +76,8 @@
             <id>sonatype</id>
             <url>https://oss.sonatype.org/content/groups/public/</url>
         </repository>
+
+
     </repositories>
 
     <dependencies>
@@ -68,5 +87,14 @@
             <version>1.21.4-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
+
+        <dependency>
+            <groupId>com.jeff-media</groupId>
+            <artifactId>armor-equip-event</artifactId>
+            <version>1.0.3</version>
+            <scope>compile</scope>
+        </dependency>
+
+
     </dependencies>
 </project>

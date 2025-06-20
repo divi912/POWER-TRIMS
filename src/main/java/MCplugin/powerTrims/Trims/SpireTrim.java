@@ -68,26 +68,8 @@ public class SpireTrim implements Listener {
         this.vulnerableKey = new NamespacedKey(plugin, "spire_vulnerable_effect");
         this.markedTargets = new HashSet<>();
         this.dashingPlayers = new HashSet<>();
-        SpirePassive();
     }
 
-    private void SpirePassive() {
-        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.SPIRE)) {
-                    if (!player.hasPotionEffect(PotionEffectType.SPEED)) {
-                        player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, Integer.MAX_VALUE, 1, true, false, true));
-                        player.getPersistentDataContainer().set(effectKey, PersistentDataType.BYTE, (byte) 1);
-                    }
-                } else {
-                    if (player.getPersistentDataContainer().has(effectKey, PersistentDataType.BYTE)) {
-                        player.removePotionEffect(PotionEffectType.SPEED);
-                        player.getPersistentDataContainer().remove(effectKey);
-                    }
-                }
-            }
-        }, 0L, 20L);
-    }
 
     public void SpirePrimary(Player player) {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.SPIRE)) return;

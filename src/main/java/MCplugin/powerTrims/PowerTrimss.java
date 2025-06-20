@@ -25,6 +25,7 @@ package MCplugin.powerTrims;
 
 import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.Trims.*;
+import com.jeff_media.armorequipevent.ArmorEquipEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
@@ -35,7 +36,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.util.UUID;
 
 public final class PowerTrimss extends JavaPlugin implements Listener {
     private TrimCooldownManager cooldownManager;
@@ -44,7 +44,25 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
+        saveDefaultConfig();
+
+        // Initialize managers
+        trustManager = new PersistentTrustManager(this);
+        dataManager = new DataManager(this);
+        cooldownManager = new TrimCooldownManager(this);
+
+        // Register trim abilities first to use below
+        registerTrimAbilities();
+
+        // Register core events
+        ArmorEquipEvent.registerListener(this);
+        new TrimEffectManager(this);
         getServer().getPluginManager().registerEvents(this, this);
+        getServer().getPluginManager().registerEvents(new LoreChanger(), this);
+
+        // Register commands
+        getCommand("trust").setExecutor(this);
+        getCommand("untrust").setExecutor(this);
 
         // Stylish startup message
         getLogger().info(ChatColor.GREEN + "--------------------------------------");
@@ -52,26 +70,9 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         getLogger().info(ChatColor.AQUA + "   Made by " + ChatColor.BOLD + "div");
         getLogger().info(ChatColor.GREEN + "--------------------------------------");
 
-        trustManager = new PersistentTrustManager(this);
 
-        // Register commands
-        getCommand("trust").setExecutor(this);
-        getCommand("untrust").setExecutor(this);
-
-
-
-        saveDefaultConfig();
-
-        dataManager = new DataManager(this);
-        cooldownManager = new TrimCooldownManager(this);
-
-
-
-        // Register trim abilities
-        registerTrimAbilities();
-
-        getServer().getPluginManager().registerEvents(new LoreChanger(), this);
     }
+
 
     private void registerTrimAbilities() {
         getServer().getPluginManager().registerEvents(new SilenceTrim(this, cooldownManager, trustManager), this);

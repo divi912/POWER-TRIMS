@@ -47,28 +47,10 @@ public class WayfinderTrim implements Listener {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.effectKey = new NamespacedKey(plugin, "wayfinder_trim_effect");
-        WayfinderPassive();
+
     }
 
-    private void WayfinderPassive() {
-        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WAYFINDER)) {
-                    if (player.isSneaking()) {
-                        player.setWalkSpeed(0.6f); // Increased speed while sneaking
-                        player.getPersistentDataContainer().set(effectKey, PersistentDataType.BYTE, (byte) 1);
-                    } else {
-                        player.setWalkSpeed(0.2f); // Normal speed when not sneaking
-                    }
-                } else {
-                    if (player.getPersistentDataContainer().has(effectKey, PersistentDataType.BYTE)) {
-                        player.setWalkSpeed(0.2f);
-                        player.getPersistentDataContainer().remove(effectKey);
-                    }
-                }
-            }
-        }, 0L, 10L);
-    }
+
 
     public void WayfinderPrimary(Player player) {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WAYFINDER)) {

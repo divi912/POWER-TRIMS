@@ -55,26 +55,9 @@ public class EyeTrim implements Listener {
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "eye_trim_effect");
-        EyePassive();
+
     }
 
-    private void EyePassive() {
-        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.EYE)) {
-                    if (!player.hasPotionEffect(PotionEffectType.NIGHT_VISION)) {
-                        player.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION, Integer.MAX_VALUE, 0, true, false, true));
-                        player.getPersistentDataContainer().set(effectKey, PersistentDataType.BYTE, (byte) 1);
-                    }
-                } else {
-                    if (player.getPersistentDataContainer().has(effectKey, PersistentDataType.BYTE)) {
-                        player.removePotionEffect(PotionEffectType.NIGHT_VISION);
-                        player.getPersistentDataContainer().remove(effectKey);
-                    }
-                }
-            }
-        }, 0L, 20L);
-    }
 
     public void EyePrimary(Player player) {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.EYE)) return;

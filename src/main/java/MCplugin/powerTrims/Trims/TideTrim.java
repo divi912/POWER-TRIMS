@@ -58,28 +58,8 @@ public class TideTrim implements Listener {
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "tide_trim_effect");
-        TidePassive();
     }
 
-    private void TidePassive() {
-        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.TIDE)) {
-                    if (!player.hasPotionEffect(PotionEffectType.DOLPHINS_GRACE)) {
-                        player.addPotionEffect(new PotionEffect(PotionEffectType.DOLPHINS_GRACE, Integer.MAX_VALUE, 2, true, false, true));
-                        // Mark that the effect was given by the armor
-                        player.getPersistentDataContainer().set(effectKey, PersistentDataType.BYTE, (byte) 1);
-                    }
-                } else {
-                    // Only remove the effect if we previously applied it
-                    if (player.getPersistentDataContainer().has(effectKey, PersistentDataType.BYTE)) {
-                        player.removePotionEffect(PotionEffectType.DOLPHINS_GRACE);
-                        player.getPersistentDataContainer().remove(effectKey); // Clean up the marker
-                    }
-                }
-            }
-        }, 0L, 20L); // Check every second
-    }
 
     public void TidePrimary(Player player) {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.TIDE)) return;

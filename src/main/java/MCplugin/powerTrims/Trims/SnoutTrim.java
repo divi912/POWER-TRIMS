@@ -72,7 +72,6 @@ public class SnoutTrim implements Listener {
         initializeTeam();
         startSkeletonTargetUpdater();
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        startSnoutPassive();
     }
 
     private void initializeTeam() {
@@ -84,23 +83,6 @@ public class SnoutTrim implements Listener {
         }
     }
 
-    private void startSnoutPassive() {
-        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                boolean hasSnoutTrim = ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.SNOUT);
-                boolean hasEffect = player.hasPotionEffect(PotionEffectType.STRENGTH);
-                boolean stored = player.getPersistentDataContainer().has(effectKey, PersistentDataType.BYTE);
-
-                if (hasSnoutTrim && !hasEffect) {
-                    player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, Integer.MAX_VALUE, 0, true, false, true));
-                    player.getPersistentDataContainer().set(effectKey, PersistentDataType.BYTE, (byte) 1);
-                } else if (!hasSnoutTrim && stored) {
-                    player.removePotionEffect(PotionEffectType.STRENGTH);
-                    player.getPersistentDataContainer().remove(effectKey);
-                }
-            }
-        }, 0L, 20L);
-    }
 
 
     public void SnoutPrimary(Player player) {

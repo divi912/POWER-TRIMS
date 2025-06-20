@@ -36,10 +36,8 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
 
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class HostTrim implements Listener {
@@ -55,11 +53,11 @@ public class HostTrim implements Listener {
 
 
     public HostTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
-        this.plugin = plugin;
-        this.cooldownManager = cooldownManager;
-        this.trustManager = trustManager; // Initialize the Trust Manager
-        this.effectKey = new NamespacedKey(plugin, "host_trim_effect");
-        Bukkit.getPluginManager().registerEvents(this, plugin);
+            this.plugin = plugin;
+            this.cooldownManager = cooldownManager;
+            this.trustManager = trustManager;
+            this.effectKey = new NamespacedKey(plugin, "host_trim_effect");
+            Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
     @EventHandler
@@ -175,5 +173,6 @@ public class HostTrim implements Listener {
             HostPrimary(player);
         }
     }
+
 
 }

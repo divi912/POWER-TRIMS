@@ -24,6 +24,7 @@ package MCplugin.powerTrims.Trims;
 import MCplugin.powerTrims.Logic.ArmourChecking;
 import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import com.jeff_media.armorequipevent.ArmorEquipEvent;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -67,24 +68,9 @@ public class SilenceTrim implements Listener {
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "silence_trim_effect");
-        SilencePassive();
+
     }
 
-    private void SilencePassive() {
-        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.SILENCE)) {
-                    if (!player.hasPotionEffect(PotionEffectType.STRENGTH)) {
-                        player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, Integer.MAX_VALUE, 1, true, false, true));
-                        player.getPersistentDataContainer().set(effectKey, PersistentDataType.BYTE, (byte) 3);
-                    }
-                } else if (player.getPersistentDataContainer().has(effectKey, PersistentDataType.BYTE)) {
-                    player.removePotionEffect(PotionEffectType.STRENGTH);
-                    player.getPersistentDataContainer().remove(effectKey);
-                }
-            }
-        }, 0L, 20L);
-    }
 
     public void SilencePrimary(Player player) {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.SILENCE) ||

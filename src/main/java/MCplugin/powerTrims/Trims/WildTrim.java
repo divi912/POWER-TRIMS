@@ -54,32 +54,8 @@ public class WildTrim implements Listener {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
-        WildPassive();
     }
 
-    private void WildPassive() {
-        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                NamespacedKey effectKey = new NamespacedKey(plugin, "wild_trim_effect");
-
-                if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WILD)) {
-                    if (!player.hasPotionEffect(PotionEffectType.REGENERATION)) {
-                        player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, Integer.MAX_VALUE, 0, true, false, true));
-                        // Mark that the effect was given by the armor
-                        player.getPersistentDataContainer().set(effectKey, PersistentDataType.BYTE, (byte) 1);
-                    }
-                } else {
-                    // Only remove the effect if we previously applied it
-                    if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WILD)) {
-                        if (player.getPersistentDataContainer().has(effectKey, PersistentDataType.BYTE)) {
-                            player.removePotionEffect(PotionEffectType.REGENERATION);
-                            player.getPersistentDataContainer().remove(effectKey); // Clean up the marker
-                        }
-                    }
-                }
-            }
-        }, 0L, 20L);
-    }
 
 
     public void WildPrimary(Player player) {

@@ -67,27 +67,10 @@ public class WardTrim implements Listener {
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "ward_trim_effect");
-        WardPassive();
     }
 
 
-    private void WardPassive() {
-        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WARD)) {
-                    if (!player.hasPotionEffect(PotionEffectType.RESISTANCE)) {
-                        player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, Integer.MAX_VALUE, 0, true, false, true));
-                        player.getPersistentDataContainer().set(effectKey, PersistentDataType.BYTE, (byte) 1);
-                    }
-                } else {
-                    if (player.getPersistentDataContainer().has(effectKey, PersistentDataType.BYTE)) {
-                        player.removePotionEffect(PotionEffectType.RESISTANCE);
-                        player.getPersistentDataContainer().remove(effectKey);
-                    }
-                }
-            }
-        }, 0L, 20L);
-    }
+
 
     public void WardPrimary(Player player) {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WARD)) {

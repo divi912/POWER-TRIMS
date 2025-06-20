@@ -52,30 +52,8 @@ public class DuneTrim implements Listener {
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "dune_trim_effect");
-        DunePassive();
     }
 
-    private void DunePassive() {
-        Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                if (ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.DUNE)) {
-                    if (!player.hasPotionEffect(PotionEffectType.HASTE)) {
-                        player.addPotionEffect(new PotionEffect(PotionEffectType.HASTE, Integer.MAX_VALUE, 0, true, false, true));
-                    }
-                    if (!player.hasPotionEffect(PotionEffectType.FIRE_RESISTANCE)) {
-                        player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, Integer.MAX_VALUE, 0, true, false, true));
-                    }
-                    player.getPersistentDataContainer().set(effectKey, PersistentDataType.BYTE, (byte) 1);
-                } else {
-                    if (player.getPersistentDataContainer().has(effectKey, PersistentDataType.BYTE)) {
-                        player.removePotionEffect(PotionEffectType.HASTE);
-                        player.removePotionEffect(PotionEffectType.FIRE_RESISTANCE);
-                        player.getPersistentDataContainer().remove(effectKey);
-                    }
-                }
-            }
-        }, 0L, 20L);
-    }
 
     private void createExpandingEffect(Player player) {
         // Center the effect at roughly the player's mid-body
