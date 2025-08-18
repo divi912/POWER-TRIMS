@@ -1,31 +1,12 @@
-/*
- * This file is part of [ POWER TRIMS ].
- *
- * [POWER TRIMS] is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * [ POWER TRIMS ] is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
- *
- * Copyright (C) [2025] [ div ].
- */
-
-
-
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; 
+import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
-import org.bukkit.entity.*;
+import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Mob;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
@@ -36,103 +17,105 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
 
-
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.Set;
 
 public class HostTrim implements Listener {
-    private final JavaPlugin plugin;
+
     private final TrimCooldownManager cooldownManager;
-    private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
-    private final NamespacedKey effectKey;
-    private static final long ESSENCE_REAPER_COOLDOWN = 120000; // 2 minutes cooldown
+    private final PersistentTrustManager trustManager;
+
+    // --- CONSTANTS ---
+    private static final long ESSENCE_REAPER_COOLDOWN = 120_000L; // 2 minutes
     private static final double EFFECT_STEAL_RADIUS = 10.0;
     private static final double HEALTH_STEAL_AMOUNT = 4.0; // 2 hearts
-    private final Map<Player, Set<PotionEffectType>> stolenEffects = new ConcurrentHashMap<>();
-    private final Map<PotionEffectType, Player> effectOwners = new ConcurrentHashMap<>();
+    private static final int ACTIVATION_SLOT = 8; // 9th hotbar slot
+    private static final double PARTICLE_DENSITY = 4.0; // Particles per block
 
+    // Using Sets for efficient 'contains' checks and better readability
+    private static final Set<EntityType> BOSS_MOBS = EnumSet.of(
+            EntityType.WARDEN,
+            EntityType.ENDER_DRAGON,
+            EntityType.WITHER
+    );
+
+    private static final Set<PotionEffectType> POSITIVE_EFFECTS = Set.of(
+            PotionEffectType.SPEED, PotionEffectType.REGENERATION, PotionEffectType.STRENGTH,
+            PotionEffectType.FIRE_RESISTANCE, PotionEffectType.RESISTANCE, PotionEffectType.ABSORPTION
+    );
 
     public HostTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
-            this.plugin = plugin;
-            this.cooldownManager = cooldownManager;
-            this.trustManager = trustManager;
-            this.effectKey = new NamespacedKey(plugin, "host_trim_effect");
-            Bukkit.getPluginManager().registerEvents(this, plugin);
+        this.cooldownManager = cooldownManager;
+        this.trustManager = trustManager;
+        plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
     @EventHandler
     public void onEntityTarget(EntityTargetLivingEntityEvent event) {
-        if (!(event.getTarget() instanceof Player targetPlayer)) {
+        if (!(event.getTarget() instanceof Player targetPlayer) || !(event.getEntity() instanceof Mob mob)) {
             return;
         }
 
-        LivingEntity attacker = (LivingEntity) event.getEntity();
-        if (!(attacker instanceof Mob mob)) {
+        // Ignore boss mobs
+        if (BOSS_MOBS.contains(mob.getType())) {
             return;
         }
 
-        // Check if the target player is wearing full Host Trim armor
         if (ArmourChecking.hasFullTrimmedArmor(targetPlayer, TrimPattern.HOST)) {
-            EntityType attackerType = attacker.getType();
-
-            // Check if the attacker is NOT a boss mob
-            if (attackerType != EntityType.WARDEN &&
-                    attackerType != EntityType.ENDER_DRAGON &&
-                    attackerType != EntityType.WITHER) {
-                event.setCancelled(true); // Cancel the targeting
-                mob.setTarget(null); // Optionally, clear the mob's current target
-            }
+            event.setCancelled(true);
+            mob.setTarget(null);
         }
     }
 
+    @EventHandler
+    public void onHotbarSwitch(PlayerItemHeldEvent event) {
+        // Use the constant and check both conditions
+        if (event.getNewSlot() == ACTIVATION_SLOT && event.getPlayer().isSneaking()) {
+            activateHostPrimary(event.getPlayer());
+        }
+    }
 
-    public void HostPrimary(Player player) {
-        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.HOST)) {
+    public void activateHostPrimary(Player player) {
+        // Combine guard clauses for cleaner code
+        if (cooldownManager.isOnCooldown(player, TrimPattern.HOST) ||
+                !ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.HOST)) {
             return;
         }
-        if (cooldownManager.isOnCooldown(player, TrimPattern.HOST)) {
-            return;
-        }
 
-        World world = player.getWorld();
         Location playerLoc = player.getLocation();
-        Player hostUser = player; // Store the player using the ability
+        World world = player.getWorld();
 
-        // Initialize the set of stolen effects if it's not already initialized
-        stolenEffects.putIfAbsent(player, new HashSet<>());
+        // Use a LOCAL set to track effects stolen in THIS activation to avoid memory leaks
+        Set<PotionEffectType> stolenThisActivation = new HashSet<>();
 
-        // For each nearby player, steal positive potion effects and health
-        for (Entity entity : world.getNearbyEntities(playerLoc, EFFECT_STEAL_RADIUS, EFFECT_STEAL_RADIUS, EFFECT_STEAL_RADIUS)) {
-            if (entity instanceof Player targetPlayer && !targetPlayer.equals(hostUser)) {
-                if (trustManager.isTrusted(hostUser.getUniqueId(), targetPlayer.getUniqueId())) {
-                    continue; // Skip trusted players
+        // Use getNearbyPlayers for better performance
+        for (Player targetPlayer : world.getNearbyPlayers(playerLoc, EFFECT_STEAL_RADIUS, EFFECT_STEAL_RADIUS, EFFECT_STEAL_RADIUS)) {
+            if (targetPlayer.equals(player) || trustManager.isTrusted(player.getUniqueId(), targetPlayer.getUniqueId())) {
+                continue;
+            }
+
+            // Steal Potion Effects
+            // Iterate over a copy to prevent ConcurrentModificationException
+            for (PotionEffect effect : new ArrayList<>(targetPlayer.getActivePotionEffects())) {
+                PotionEffectType type = effect.getType();
+
+                // Check if it's a positive effect AND we haven't stolen this type yet in this activation
+                if (POSITIVE_EFFECTS.contains(type) && stolenThisActivation.add(type)) {
+                    targetPlayer.removePotionEffect(type);
+                    player.addPotionEffect(new PotionEffect(type, effect.getDuration(), effect.getAmplifier() + 1, true, true));
                 }
-                Collection<PotionEffect> effects = targetPlayer.getActivePotionEffects();
-                for (PotionEffect effect : effects) {
-                    PotionEffectType type = effect.getType();
-                    if (isPositiveEffect(type) && !stolenEffects.get(player).contains(type)) {
-                        // Prevent the player from stealing back an effect they had stolen from them
-                        if (effectOwners.containsKey(type) && effectOwners.get(type).equals(hostUser)) {
-                            continue; // Don't allow stealing back their own effect
-                        }
+            }
 
-                        targetPlayer.removePotionEffect(type); // Remove from target
-                        // Add the effect to the user with an increased amplifier (+1 level)
-                        player.addPotionEffect(new PotionEffect(type, effect.getDuration(), effect.getAmplifier() + 1));
+            // Steal Health
+            double targetHealth = targetPlayer.getHealth();
+            double healthToSteal = Math.min(targetHealth, HEALTH_STEAL_AMOUNT);
 
-                        // Track the stolen effect
-                        stolenEffects.get(player).add(type);
-                        effectOwners.put(type, targetPlayer); // Track who owned this effect
-                    }
-                }
-
-                // Steal health: take up to 3 hearts from the target and add it to the user
-                double stolenHealth = Math.min(targetPlayer.getHealth(), HEALTH_STEAL_AMOUNT);
-                targetPlayer.setHealth(Math.max(0, targetPlayer.getHealth() - stolenHealth));
-                player.setHealth(Math.min(player.getMaxHealth(), player.getHealth() + stolenHealth));
-
-                // Create a particle trail from the user to the target for visual effect
-                createParticleTrail(player.getLocation(), targetPlayer.getLocation(), world);
+            if (healthToSteal > 0) {
+                targetPlayer.setHealth(Math.max(0, targetHealth - healthToSteal));
+                player.setHealth(Math.min(player.getMaxHealth(), player.getHealth() + healthToSteal));
+                createParticleTrail(playerLoc, targetPlayer.getLocation(), world);
             }
         }
 
@@ -143,36 +126,23 @@ public class HostTrim implements Listener {
         player.sendMessage(ChatColor.DARK_PURPLE + "Essence Reaper activated!");
     }
 
-    // Helper method to determine if a potion effect is positive
-    private boolean isPositiveEffect(PotionEffectType type) {
-        return type == PotionEffectType.SPEED
-                || type == PotionEffectType.REGENERATION
-                || type == PotionEffectType.STRENGTH
-                || type == PotionEffectType.FIRE_RESISTANCE
-                || type == PotionEffectType.RESISTANCE
-                || type == PotionEffectType.ABSORPTION;
-    }
-
-    // Creates a particle trail from start to end
     private void createParticleTrail(Location start, Location end, World world) {
-        Vector diff = end.toVector().subtract(start.toVector());
-        double length = diff.length();
-        int steps = (int) (length * 4);
-        Vector step = diff.clone().normalize().multiply(length / steps);
-        Location point = start.clone();
+        Vector direction = end.toVector().subtract(start.toVector());
+
+        // Avoid division by zero if start and end are the same
+        if (direction.lengthSquared() < 0.001) {
+            return;
+        }
+
+        double distance = direction.length();
+        Vector step = direction.normalize().multiply(1.0 / PARTICLE_DENSITY);
+        int steps = (int) (distance * PARTICLE_DENSITY);
+
+        // Use a mutable location to avoid creating new Vector objects in the loop
+        Location currentPoint = start.clone();
         for (int i = 0; i < steps; i++) {
-            world.spawnParticle(Particle.SOUL_FIRE_FLAME, point, 1, 0, 0, 0, 0);
-            point.add(step);
+            currentPoint.add(step);
+            world.spawnParticle(Particle.SOUL_FIRE_FLAME, currentPoint, 1, 0, 0, 0, 0);
         }
     }
-
-    @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        Player player = event.getPlayer();
-        if (player.isSneaking() && event.getNewSlot() == 8) {
-            HostPrimary(player);
-        }
-    }
-
-
 }

@@ -1,28 +1,7 @@
-/*
- * This file is part of [ POWER TRIMS ].
- *
- * [POWER TRIMS] is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * [ POWER TRIMS ] is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
- *
- * Copyright (C) [2025] [ div ].
- */
-
-
-
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; 
+import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.entity.*;
@@ -48,6 +27,7 @@ public class SentryTrim implements Listener {
     private final NamespacedKey effectKey;
     private final Set<UUID> activeGuards;
 
+    // --- CONSTANTS ---
     private static final int ARROW_COUNT = 4;
     private static final double SPREAD = 0.15;
     private static final int COOLDOWN = 90 * 1000; // 90 seconds

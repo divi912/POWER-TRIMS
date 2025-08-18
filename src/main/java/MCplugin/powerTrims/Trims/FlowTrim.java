@@ -27,6 +27,7 @@ public class FlowTrim implements Listener {
     private final NamespacedKey effectKey;
     private final NamespacedKey dashEndFallImmunityKey;
 
+    // --- CONSTANTS ---
     // Heart cost settings
     private static final int HEART_COST_INTERVAL = 20;       // ticks (1 second)
     private static final double HEART_COST_AMOUNT = 2.0;     // HP (1 heart)

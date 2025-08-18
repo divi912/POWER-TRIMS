@@ -1,28 +1,7 @@
-/*
- * This file is part of [ POWER TRIMS ].
- *
- * [POWER TRIMS] is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * [ POWER TRIMS ] is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
- *
- * Copyright (C) [2025] [ div ].
- */
-
-
-
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; 
+import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -34,31 +13,43 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.Vector;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class CoastTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
-    private final PersistentTrustManager trustManager; 
-    private final NamespacedKey effectKey;
+    private final PersistentTrustManager trustManager;
 
-    // Constants for ability behavior
-    private static final int WATER_BURST_RADIUS = 30; // Radius to affect nearby entities
-    private static final int WATER_BURST_DAMAGE = 10; // Damage dealt to affected entities
-    private static final long WATER_BURST_COOLDOWN = 60000; // Cooldown in milliseconds
+    // --- Ability Constants ---
+    // Behavior
+    private static final int WATER_BURST_RADIUS = 30;
+    private static final int WATER_BURST_DAMAGE = 10;
+    private static final long WATER_BURST_COOLDOWN = 60000; // 60 seconds
+    private static final int PULL_DURATION_TICKS = 60;    // 3 seconds
+
+    // Potion Effects
+    private static final int DEBUFF_DURATION_TICKS = 80;    // 4 seconds
+    private static final int BUFF_DURATION_TICKS = 100;     // 5 seconds
+    private static final int WEAKNESS_AMPLIFIER = 1;
+    private static final int SLOWNESS_AMPLIFIER = 1;
+    private static final int SPEED_AMPLIFIER = 1;
+    private static final int RESISTANCE_AMPLIFIER = 0;
+
+    // Trigger
+    private static final int ACTIVATION_SLOT = 8; // The 9th hotbar slot
 
     public CoastTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
-        this.trustManager = trustManager; // Initialize the Trust Manager
-        this.effectKey = new NamespacedKey(plugin, "coast_trim_effect");
+        this.trustManager = trustManager;
     }
-
 
     // Activates the Coast Trim ability: Water Burst
     public void CoastPrimary(Player player) {
@@ -67,59 +58,98 @@ public class CoastTrim implements Listener {
 
         Location playerLoc = player.getLocation();
         World world = player.getWorld();
-        Player coastUser = player; // Store the player using the ability
 
-        // Play activation sound effects
-        world.playSound(playerLoc, Sound.ENTITY_DOLPHIN_PLAY, 1.0f, 1.5f);
-        world.playSound(playerLoc, Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 0.5f);
+        // Play activation sounds and show particles
+        playEffects(playerLoc, world);
 
-        // Create a water particle ring around the player
-        for (double angle = 0; angle < 360; angle += 10) {
-            double rad = Math.toRadians(angle);
-            double offsetX = Math.cos(rad) * 1.5;
-            double offsetZ = Math.sin(rad) * 1.5;
-            Location effectLoc = playerLoc.clone().add(offsetX, 0.5, offsetZ);
-            world.spawnParticle(Particle.FALLING_WATER, effectLoc, 20, 0.1, 0.1, 0.1, 0.1);
-        }
-
-        // Create a cloud effect above the player
-        world.spawnParticle(Particle.CLOUD, playerLoc.clone().add(0, 1, 0), 50, 1, 0.5, 1, 0.1);
-
-        // Affect nearby entities: pull them, damage them, and apply debuffs
+        // Collect all valid targets into a list
+        List<LivingEntity> targets = new ArrayList<>();
         for (Entity entity : world.getNearbyEntities(playerLoc, WATER_BURST_RADIUS, WATER_BURST_RADIUS, WATER_BURST_RADIUS)) {
-            if (entity instanceof LivingEntity target && !target.equals(coastUser)) {
-                if (target instanceof Player targetPlayer && trustManager.isTrusted(coastUser.getUniqueId(), targetPlayer.getUniqueId())) {
-                    continue; // Skip trusted players
+            if (entity instanceof LivingEntity target && !target.equals(player)) {
+                // Skip trusted players
+                if (target instanceof Player targetPlayer && trustManager.isTrusted(player.getUniqueId(), targetPlayer.getUniqueId())) {
+                    continue;
                 }
-                // Apply instant damage and potion debuffs
-                target.damage(WATER_BURST_DAMAGE);
-                target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 80, 1)); // 4 seconds
-                target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 80, 1)); // 4 seconds
+
+                // Apply instant damage and debuffs
+                target.damage(WATER_BURST_DAMAGE, player);
+                target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, DEBUFF_DURATION_TICKS, WEAKNESS_AMPLIFIER));
+                target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, DEBUFF_DURATION_TICKS, SLOWNESS_AMPLIFIER));
                 world.spawnParticle(Particle.SPLASH, target.getLocation().add(0, 1, 0), 30, 0.5, 0.5, 0.5, 0.1);
 
-                // Continuously pull the entity toward the player
-                new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        if (!target.isValid() || target.getLocation().distance(coastUser.getLocation()) < 2) {
-                            cancel();
-                            return;
-                        }
-                        Vector pullDirection = coastUser.getLocation().toVector().subtract(target.getLocation().toVector()).normalize().multiply(1.0);
-                        target.setVelocity(pullDirection);
-                    }
-                }.runTaskTimer(plugin, 0L, 1L); // Pull every tick
+                targets.add(target);
             }
         }
 
+        // Start ONE consolidated task to pull all collected targets
+        if (!targets.isEmpty()) {
+            startPullTask(targets, player);
+        }
+
         // Apply buffs to the player
-        player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 100, 1));      // Speed II for 5 seconds
-        player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 100, 0)); // Resistance I for 5 seconds
+        player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, BUFF_DURATION_TICKS, SPEED_AMPLIFIER));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, BUFF_DURATION_TICKS, RESISTANCE_AMPLIFIER));
 
         // Set ability cooldown
         cooldownManager.setCooldown(player, TrimPattern.COAST, WATER_BURST_COOLDOWN);
 
-        // Send activation message to the player
+        // Send activation message
+        sendActivationMessage(player);
+    }
+
+    private void playEffects(Location location, World world) {
+        world.playSound(location, Sound.ENTITY_DOLPHIN_PLAY, 1.0f, 1.5f);
+        world.playSound(location, Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 0.5f);
+
+        // Water particle ring
+        for (double angle = 0; angle < 360; angle += 10) {
+            double rad = Math.toRadians(angle);
+            double offsetX = Math.cos(rad) * 1.5;
+            double offsetZ = Math.sin(rad) * 1.5;
+            Location effectLoc = location.clone().add(offsetX, 0.5, offsetZ);
+            world.spawnParticle(Particle.FALLING_WATER, effectLoc, 20, 0.1, 0.1, 0.1, 0.1);
+        }
+
+        // Cloud effect
+        world.spawnParticle(Particle.CLOUD, location.clone().add(0, 1, 0), 50, 1, 0.5, 1, 0.1);
+    }
+
+    private void startPullTask(List<LivingEntity> targets, Player user) {
+        new BukkitRunnable() {
+            private int ticksLived = 0;
+
+            @Override
+            public void run() {
+                // Stop the task if the user is offline or the duration is over
+                if (ticksLived++ > PULL_DURATION_TICKS || !user.isOnline()) {
+                    this.cancel();
+                    return;
+                }
+
+                // Remove invalid targets to prevent errors and improve performance
+                targets.removeIf(t -> !t.isValid() || t.isDead());
+
+                if (targets.isEmpty()){
+                    this.cancel();
+                    return;
+                }
+
+                Location userLocation = user.getLocation();
+
+                for (LivingEntity target : targets) {
+                    // Stop pulling an entity if it gets close (using distanceSquared is more performant)
+                    if (target.getLocation().distanceSquared(userLocation) < 4) { // 2*2 = 4
+                        continue;
+                    }
+
+                    Vector pullDirection = userLocation.toVector().subtract(target.getLocation().toVector()).normalize();
+                    target.setVelocity(pullDirection);
+                }
+            }
+        }.runTaskTimer(plugin, 0L, 1L); // Run every tick
+    }
+
+    private void sendActivationMessage(Player player) {
         Component message = Component.text("[", NamedTextColor.DARK_GRAY)
                 .append(Component.text("Coast", NamedTextColor.DARK_AQUA))
                 .append(Component.text("] ", NamedTextColor.DARK_GRAY))
@@ -133,7 +163,7 @@ public class CoastTrim implements Listener {
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
         Player player = event.getPlayer();
-        if (player.isSneaking() && event.getNewSlot() == 8) {
+        if (player.isSneaking() && event.getNewSlot() == ACTIVATION_SLOT) {
             CoastPrimary(player);
         }
     }

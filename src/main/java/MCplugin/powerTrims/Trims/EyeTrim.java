@@ -18,143 +18,168 @@
  */
 
 
-
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; 
+import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
-import org.bukkit.entity.*;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 public class EyeTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
-    private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
-    private final NamespacedKey effectKey;
+    private final PersistentTrustManager trustManager;
+
+    // --- CONSTANTS ---
     private static final double TRUE_SIGHT_RADIUS = 80.0;
-    private static final int TRUE_SIGHT_DURATION = 600; // 30 seconds (in ticks)
-    private static final long TRUE_SIGHT_COOLDOWN = 120000; // 2 minutes
+    private static final int TRUE_SIGHT_DURATION_TICKS = 600; // 30 seconds
+    private static final long TRUE_SIGHT_COOLDOWN = 120_000L; // 2 minutes
+    private static final long TASK_INTERVAL_TICKS = 20L; // Run task once per second
+    private static final int ACTIVATION_SLOT = 8;
+
+    // --- STATE MANAGEMENT ---
     private final Map<UUID, BukkitRunnable> activeTrueSightTasks = new HashMap<>();
 
     public EyeTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
-        this.trustManager = trustManager; // Initialize the Trust Manager
-        this.effectKey = new NamespacedKey(plugin, "eye_trim_effect");
-
+        this.trustManager = trustManager;
+        plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
+    @EventHandler
+    public void onHotbarSwitch(PlayerItemHeldEvent event) {
+        if (event.getNewSlot() == ACTIVATION_SLOT && event.getPlayer().isSneaking()) {
+            activateEyePrimary(event.getPlayer());
+        }
+    }
 
-    public void EyePrimary(Player player) {
+    public void activateEyePrimary(Player player) {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.EYE)) return;
         if (cooldownManager.isOnCooldown(player, TrimPattern.EYE)) return;
 
-        // Cancel existing effect if present
-        if (activeTrueSightTasks.containsKey(player.getUniqueId())) {
-            activeTrueSightTasks.get(player.getUniqueId()).cancel();
-        }
+        // Cancel any existing task for this player to prevent duplicates
+        activeTrueSightTasks.computeIfPresent(player.getUniqueId(), (uuid, task) -> {
+            task.cancel();
+            return null;
+        });
 
         // Activation effects
-        Location loc = player.getLocation();
-        player.getWorld().playSound(loc, Sound.ENTITY_ELDER_GUARDIAN_CURSE, 1.0f, 2.0f);
-        player.getWorld().playSound(loc, Sound.BLOCK_BEACON_ACTIVATE, 1.0f, 1.5f);
-        createEyeEffect(player);
-        Player eyeUser = player; // Store the player using the ability
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ELDER_GUARDIAN_CURSE, 1.0f, 2.0f);
+        player.getWorld().playSound(player.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 1.0f, 1.5f);
+        createEyeEffect(player, true); // Initial, more intense effect
 
-        // Start True Sight task
+        // This set will track entities affected ONLY during this activation
+        final Set<UUID> affectedEntities = new HashSet<>();
+
         BukkitRunnable trueSightTask = new BukkitRunnable() {
-            int ticks = 0;
+            private int ticksRun = 0;
 
             @Override
             public void run() {
-                if (ticks >= TRUE_SIGHT_DURATION || !eyeUser.isOnline()) {
-                    cancel();
-                    activeTrueSightTasks.remove(eyeUser.getUniqueId());
+                // Stop condition: time is up or player logged off
+                if (ticksRun >= TRUE_SIGHT_DURATION_TICKS || !player.isOnline()) {
+                    this.cancel();
                     return;
                 }
 
-                if (ticks % 10 == 0) createEyeEffect(eyeUser);
-
-                // Highlight entities and apply effects
-                for (Entity entity : eyeUser.getWorld().getNearbyEntities(eyeUser.getLocation(), TRUE_SIGHT_RADIUS, TRUE_SIGHT_RADIUS, TRUE_SIGHT_RADIUS)) {
-                    if (entity instanceof LivingEntity target && !target.equals(eyeUser)) {
-                        if (target instanceof Player targetPlayer && trustManager.isTrusted(eyeUser.getUniqueId(), targetPlayer.getUniqueId())) {
-                            continue; // Skip trusted players
-                        }
-                        // Remove invisibility
-                        if (target.hasPotionEffect(PotionEffectType.INVISIBILITY)) {
-                            target.removePotionEffect(PotionEffectType.INVISIBILITY);
+                // OPTIMIZATION: Scan for nearby entities
+                for (Entity entity : player.getNearbyEntities(TRUE_SIGHT_RADIUS, TRUE_SIGHT_RADIUS, TRUE_SIGHT_RADIUS)) {
+                    if (entity instanceof LivingEntity target && !target.equals(player)) {
+                        // Skip trusted players
+                        if (target instanceof Player targetPlayer && trustManager.isTrusted(player.getUniqueId(), targetPlayer.getUniqueId())) {
+                            continue;
                         }
 
-                        // Apply the glowing effect
-                        target.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 1200, 0, false, false)); // 1 minute glowing effect
-
-                        // Apply weakness and slowness debuffs (30 seconds)
-                        target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 600, 0, false, false)); // 30 seconds
-                        target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 600, 1, false, false)); // 30 seconds
-
-
+                        // THE KEY OPTIMIZATION: Only affect each entity ONCE by adding its UUID to a set.
+                        // The .add() method returns true only if the element was not already in the set.
+                        if (affectedEntities.add(target.getUniqueId())) {
+                            applyDebuffs(target);
+                        }
                     }
                 }
 
+                // Pulse the visual effect
+                if(ticksRun % (TASK_INTERVAL_TICKS * 5) == 0){ // Every 5 seconds
+                    createEyeEffect(player, false);
+                }
 
-                ticks += 2;
+                ticksRun += (int) TASK_INTERVAL_TICKS;
+            }
+
+            @Override
+            public synchronized void cancel() throws IllegalStateException {
+                super.cancel();
+                // Clean up the map once the task is truly cancelled
+                activeTrueSightTasks.remove(player.getUniqueId());
             }
         };
 
-        trueSightTask.runTaskTimer(plugin, 0L, 2L);
-        activeTrueSightTasks.put(eyeUser.getUniqueId(), trueSightTask);
+        // Store and run the task
+        activeTrueSightTasks.put(player.getUniqueId(), trueSightTask);
+        // OPTIMIZATION: Run task once per second, not 10 times per second
+        trueSightTask.runTaskTimer(plugin, 0L, TASK_INTERVAL_TICKS);
 
         cooldownManager.setCooldown(player, TrimPattern.EYE, TRUE_SIGHT_COOLDOWN);
         player.sendMessage("§8[§bEye§8] §7True Sight activated!");
     }
 
-    private void createEyeEffect(Player player) {
+    /**
+     * Applies the suite of debuffs to a target.
+     * @param target The LivingEntity to affect.
+     */
+    private void applyDebuffs(LivingEntity target) {
+        // Remove invisibility to reveal the target
+        target.removePotionEffect(PotionEffectType.INVISIBILITY);
+
+        // Apply effects
+        target.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 1200, 0, false, false)); // 1 minute
+        target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 600, 0, false, false)); // 30 seconds
+        target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 600, 1, false, false)); // 30 seconds
+    }
+
+    /**
+     * Creates the visual particle effect for the ability.
+     * @param player The player to center the effect on.
+     * @param isInitialActivation If true, a more intense version of the effect is played.
+     */
+    private void createEyeEffect(Player player, boolean isInitialActivation) {
         Location loc = player.getLocation();
         World world = player.getWorld();
 
-        // Create swirling dark particles around the player to form the eye
-        for (double angle = 0; angle < Math.PI * 2; angle += Math.PI / 15) {
-            double x = Math.cos(angle) * TRUE_SIGHT_RADIUS;
-            double z = Math.sin(angle) * TRUE_SIGHT_RADIUS;
-            Location pLoc = loc.clone().add(x, 0.1, z);
+        // OPTIMIZATION: Reduced the radius from an invisible 80 blocks to a visible 15 blocks.
+        double effectRadius = 15.0;
 
-            // Dark smoke effect
-            world.spawnParticle(Particle.SMOKE, pLoc, 3, 0, 0, 0, 0.05);
-
-            // Red glowing effect using DUST particle
-            world.spawnParticle(Particle.DUST, pLoc, 2, new Particle.DustOptions(Color.fromRGB(200, 0, 0), 1.2f));
+        // This effect is intense, so only play it on the initial cast.
+        if(isInitialActivation) {
+            for (double angle = 0; angle < Math.PI * 2; angle += Math.PI / 20) {
+                double x = Math.cos(angle) * effectRadius;
+                double z = Math.sin(angle) * effectRadius;
+                Location pLoc = loc.clone().add(x, 0.1, z);
+                world.spawnParticle(Particle.SMOKE, pLoc, 3, 0, 0, 0, 0.05);
+                world.spawnParticle(Particle.DUST, pLoc, 2, new Particle.DustOptions(Color.fromRGB(200, 0, 0), 1.2f));
+            }
         }
 
-        // Central glowing effect (the eye itself)
+        // Central glowing effect (the "eye")
         world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.2, 0), 20, new Particle.DustOptions(Color.fromRGB(150, 0, 0), 1.5f));
-
-        // Add a powerful aura around the eye
-        world.spawnParticle(Particle.FLAME, loc.clone().add(0, 1.2, 0), 15, 0.6, 0.6, 0.6, 0.1);
-        world.spawnParticle(Particle.LAVA, loc.clone().add(0, 1.2, 0), 15, 0.6, 0.6, 0.6, 0.1);
-    }
-
-
-
-
-
-    @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        Player player = event.getPlayer();
-        if (player.isSneaking() && event.getNewSlot() == 8) EyePrimary(player);
+        world.spawnParticle(Particle.FLAME, loc.clone().add(0, 1.2, 0), 10, 0.5, 0.5, 0.5, 0.05);
     }
 }

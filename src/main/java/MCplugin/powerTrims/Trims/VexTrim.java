@@ -50,7 +50,6 @@ public class VexTrim implements Listener {
     private static final long HIDE_DURATION = 10000; // 10 seconds hide duration
     private static VexTrim instance;
 
-    private final Set<BukkitRunnable> activeTasks = new HashSet<>(); // Track active tasks
 
     private BukkitRunnable passiveTask;
 
@@ -87,7 +86,6 @@ public class VexTrim implements Listener {
         final int points = 72;
 
         Location center = player.getLocation().clone().add(0, 0.1, 0);
-        Particle.DustOptions dust = new Particle.DustOptions(Color.PURPLE, 1.0f);
         Player vexUser = player; // Store the player using the ability
 
         // Play sound

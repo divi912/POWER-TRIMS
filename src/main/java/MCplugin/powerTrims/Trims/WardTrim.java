@@ -50,6 +50,7 @@ public class WardTrim implements Listener {
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final NamespacedKey effectKey;
+    // --- CONSTANTS ---
     private static final int BARRIER_DURATION = 200; // 10 seconds
     private static final int ABSORPTION_LEVEL = 4; // Absorption V (increased from III)
     private static final int RESISTANCE_BOOST_LEVEL = 2; // Resistance III (increased from II)

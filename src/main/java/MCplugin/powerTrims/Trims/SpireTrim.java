@@ -52,6 +52,7 @@ public class SpireTrim implements Listener {
     private final Set<UUID> markedTargets;
     private final Set<UUID> dashingPlayers;
 
+    // --- CONSTANTS ---
     private static final int DASH_DISTANCE = 8;
     private static final double DASH_SPEED = 2.0; // Blocks per tick
     private static final double KNOCKBACK_STRENGTH = 1.5;

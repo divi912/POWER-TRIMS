@@ -18,12 +18,10 @@
  */
 
 
-
-
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; 
+import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
@@ -33,39 +31,54 @@ import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.util.Vector;
 
 import java.util.*;
 
 public class RibTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
-    private final PersistentTrustManager trustManager; 
-    private final NamespacedKey effectKey;
-    private static final long RIB_COOLDOWN = 60000; // 1 minute cooldown
+    private final PersistentTrustManager trustManager;
 
-    private static final Map<UUID, LivingEntity> playerTargetMap = new HashMap<>();
-    private static final Map<UUID, List<Mob>> playerBoggedMap = new HashMap<>();
+    // --- CONSTANTS ---
+    private static final long RIB_COOLDOWN = 60_000L; // 1 minute
+    private static final int ACTIVATION_SLOT = 8;
+    private static final long MINION_LIFESPAN_TICKS = 1200L; // 60 seconds
+    private static final NamespacedKey OWNER_KEY;
+
+    // Static initializer for the NamespacedKey
+    static {
+        // It's good practice to initialize keys once.
+        OWNER_KEY = new NamespacedKey("powertrims", "owner_uuid");
+    }
+
+    // --- INSTANCE VARIABLES (non-static to prevent memory leaks across reloads) ---
+    private final Map<UUID, LivingEntity> playerTargetMap = new HashMap<>();
+    private final Map<UUID, List<Mob>> playerMinionMap = new HashMap<>();
 
     public RibTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
-        this.trustManager = trustManager; // Initialize the Trust Manager
-        this.effectKey = new NamespacedKey(plugin, "rib_trim_effect");
-
+        this.trustManager = trustManager;
+        plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
+    @EventHandler
+    public void onHotbarSwitch(PlayerItemHeldEvent event) {
+        if (event.getNewSlot() == ACTIVATION_SLOT && event.getPlayer().isSneaking()) {
+            activateRibPrimary(event.getPlayer());
+        }
+    }
 
-    public void RibPrimary(Player player) {
+    public void activateRibPrimary(Player player) {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.RIB) || cooldownManager.isOnCooldown(player, TrimPattern.RIB)) {
             return;
         }
@@ -73,14 +86,12 @@ public class RibTrim implements Listener {
         Location playerLoc = player.getLocation();
         World world = player.getWorld();
         UUID ownerUUID = player.getUniqueId();
-        NamespacedKey ownerKey = new NamespacedKey(plugin, "owner");
-        Player ribUser = player; // Store the player using the ability
 
         world.playSound(playerLoc, Sound.ENTITY_SKELETON_AMBIENT, 1.0f, 1.0f);
         world.playSound(playerLoc, Sound.BLOCK_BONE_BLOCK_PLACE, 1.0f, 1.2f);
         createBoneEffect(player);
 
-        playerBoggedMap.putIfAbsent(ownerUUID, new ArrayList<>());
+        playerMinionMap.putIfAbsent(ownerUUID, new ArrayList<>());
         int spawnCount = 3;
 
         for (int i = 0; i < spawnCount; i++) {
@@ -89,97 +100,184 @@ public class RibTrim implements Listener {
             double offsetZ = Math.sin(angle) * 3;
             Location spawnLoc = playerLoc.clone().add(offsetX, 0, offsetZ);
 
-            LivingEntity boggedEntity = (LivingEntity) world.spawnEntity(spawnLoc, EntityType.BOGGED);
-            boggedEntity.setCustomName(ChatColor.WHITE + "Bone Warrior");
-            boggedEntity.setCustomNameVisible(true);
-            boggedEntity.setRemoveWhenFarAway(true);
-            boggedEntity.getPersistentDataContainer().set(ownerKey, PersistentDataType.STRING, ownerUUID.toString());
+            // Spawn the Bogged entity
+            Bogged bogged = world.spawn(spawnLoc, Bogged.class);
 
+            // Set properties
+            bogged.setCustomName(ChatColor.WHITE + "Bone Warrior");
+            bogged.setCustomNameVisible(true);
+            bogged.getPersistentDataContainer().set(OWNER_KEY, PersistentDataType.STRING, ownerUUID.toString());
+
+            // Apply equipment and buffs
             ItemStack bow = new ItemStack(Material.BOW);
             bow.addUnsafeEnchantment(Enchantment.POWER, 5);
-            boggedEntity.getEquipment().setItemInMainHand(bow);
-            boggedEntity.getEquipment().setItemInMainHandDropChance(0.0f);
+            Objects.requireNonNull(bogged.getEquipment()).setItemInMainHand(bow);
+            bogged.getEquipment().setItemInMainHandDropChance(0.0f);
+            applyBuffs(bogged);
 
-            if (boggedEntity instanceof Mob mob) {
-                applyBuffs(mob);
-                playerBoggedMap.get(ownerUUID).add(mob);
+            // Add to the owner's minion list
+            playerMinionMap.get(ownerUUID).add(bogged);
 
-                // Immediately try to set the target if the player has recently attacked something
-                LivingEntity currentTarget = playerTargetMap.get(ownerUUID);
-                if (currentTarget != null && currentTarget.isValid() && !currentTarget.equals(player)) {
-                    if (currentTarget instanceof Player targetPlayer && trustManager.isTrusted(ribUser.getUniqueId(), targetPlayer.getUniqueId())) {
-                        currentTarget = null; // Don't target trusted players
-                    }
-                    if (currentTarget != null) {
-                        mob.setTarget(currentTarget);
-                        // Optionally, make them look at the target immediately
-                        Location current = boggedEntity.getLocation();
-                        Vector direction = currentTarget.getLocation().toVector().subtract(current.toVector());
-                        if (!direction.equals(new Vector(0, 0, 0))) {
-                            current.setDirection(direction);
-                            boggedEntity.teleport(current);
-                        }
+            // Set initial target if one exists
+            LivingEntity currentTarget = playerTargetMap.get(ownerUUID);
+            if (isValidTarget(currentTarget, player)) {
+                bogged.setTarget(currentTarget);
+            }
+
+            // **IMPROVEMENT**: Add a despawn timer for cleanup
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    if (bogged.isValid()) {
+                        bogged.getWorld().spawnParticle(Particle.SMOKE, bogged.getLocation().add(0, 1, 0), 15, 0.3, 0.5, 0.3, 0);
+                        bogged.remove();
                     }
                 }
-
-                // Keep checking for target updates
-                new BukkitRunnable() {
-                    @Override
-                    public void run() {
-                        if (!boggedEntity.isValid()) {
-                            cancel();
-                            return;
-                        }
-                        LivingEntity target = playerTargetMap.get(ownerUUID);
-                        if (target != null && target.isValid() && !target.equals(player)) {
-                            if (target instanceof Player targetPlayer && trustManager.isTrusted(ribUser.getUniqueId(), targetPlayer.getUniqueId())) {
-                                mob.setTarget(null); // Don't target trusted players
-                                return;
-                            }
-                            if (target.getType() == EntityType.BOGGED &&
-                                    ownerUUID.toString().equals(target.getPersistentDataContainer().get(ownerKey, PersistentDataType.STRING))) {
-                                return;
-                            }
-                            mob.setTarget(target);
-                            Location current = boggedEntity.getLocation();
-                            Vector direction = target.getLocation().toVector().subtract(current.toVector());
-                            if (!direction.equals(new Vector(0, 0, 0))) {
-                                current.setDirection(direction);
-                                boggedEntity.teleport(current);
-                            }
-                        } else {
-                            mob.setTarget(null);
-                        }
-                    }
-                }.runTaskTimer(plugin, 0L, 1L);
-            }
+            }.runTaskLater(plugin, MINION_LIFESPAN_TICKS);
         }
 
         cooldownManager.setCooldown(player, TrimPattern.RIB, RIB_COOLDOWN);
         player.sendMessage("§8[§fRib§8] §7You have summoned Bone Warriors!");
     }
 
+    /**
+     * Event handler for when a player with minions attacks something.
+     * This makes the minions focus fire on the player's target.
+     */
     @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        Player player = event.getPlayer();
-        if (player.isSneaking() && event.getNewSlot() == 8) {
-            RibPrimary(player);
+    public void onOwnerAttack(EntityDamageByEntityEvent event) {
+        if (!(event.getDamager() instanceof Player owner) || !(event.getEntity() instanceof LivingEntity target)) {
+            return;
+        }
+
+        // Only act if the player actually has minions
+        List<Mob> minions = playerMinionMap.get(owner.getUniqueId());
+        if (minions == null || minions.isEmpty()) {
+            return;
+        }
+
+        if (!isValidTarget(target, owner)) {
+            playerTargetMap.remove(owner.getUniqueId());
+            return; // Don't target own minions, trusted players, etc.
+        }
+
+        // Update the primary target and command minions to attack
+        playerTargetMap.put(owner.getUniqueId(), target);
+        for (Mob minion : minions) {
+            if (minion.isValid()) {
+                minion.setTarget(target);
+            }
         }
     }
 
+    /**
+     * BEHAVIOR IMPROVEMENT: Defensive AI
+     * Makes minions attack any entity that damages their owner.
+     */
+    @EventHandler
+    public void onOwnerDamaged(EntityDamageByEntityEvent event) {
+        if (!(event.getEntity() instanceof Player owner) || !(event.getDamager() instanceof LivingEntity attacker)) {
+            return;
+        }
+
+        List<Mob> minions = playerMinionMap.get(owner.getUniqueId());
+        if (minions == null || minions.isEmpty()) {
+            return;
+        }
+
+        // Command all minions to defend their owner
+        if (isValidTarget(attacker, owner)) {
+            playerTargetMap.put(owner.getUniqueId(), attacker); // New target is the attacker
+            for (Mob minion : minions) {
+                if (minion.isValid()) {
+                    minion.setTarget(attacker);
+                }
+            }
+        }
+    }
+
+    /**
+     * Prevents minions from targeting their owner, trusted players, or allied minions.
+     */
+    @EventHandler
+    public void onMinionTarget(EntityTargetEvent event) {
+        if (!(event.getEntity() instanceof Mob minion)) return;
+        String ownerUUIDString = minion.getPersistentDataContainer().get(OWNER_KEY, PersistentDataType.STRING);
+        if (ownerUUIDString == null) return;
+
+        Player owner = Bukkit.getPlayer(UUID.fromString(ownerUUIDString));
+        if (owner == null) return;
+
+        if (!isValidTarget(event.getTarget(), owner)) {
+            event.setCancelled(true);
+        }
+    }
+
+    /**
+     * MEMORY LEAK FIX: Clean up when minions die.
+     */
+    @EventHandler
+    public void onEntityDeath(EntityDeathEvent event) {
+        LivingEntity deadEntity = event.getEntity();
+        String ownerUUIDString = deadEntity.getPersistentDataContainer().get(OWNER_KEY, PersistentDataType.STRING);
+        if (ownerUUIDString == null) return;
+
+        UUID ownerUUID = UUID.fromString(ownerUUIDString);
+        List<Mob> minions = playerMinionMap.get(ownerUUID);
+        if (minions != null) {
+            minions.remove(deadEntity);
+        }
+    }
+
+    /**
+     * MEMORY LEAK FIX: Clean up when the owner logs out.
+     */
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        UUID ownerUUID = event.getPlayer().getUniqueId();
+        List<Mob> minions = playerMinionMap.remove(ownerUUID);
+        if (minions != null) {
+            for (Mob minion : minions) {
+                if (minion.isValid()) {
+                    minion.remove();
+                }
+            }
+        }
+        playerTargetMap.remove(ownerUUID);
+    }
+
+    // --- HELPER METHODS ---
+
+    /**
+     * A central method to check if a target is valid for a player's minions.
+     * @param target The potential target entity.
+     * @param owner The owner of the minions.
+     * @return True if the target is valid, false otherwise.
+     */
+    private boolean isValidTarget(Entity target, Player owner) {
+        if (target == null || !target.isValid() || target.equals(owner)) {
+            return false;
+        }
+        // Don't target trusted players
+        if (target instanceof Player targetPlayer && trustManager.isTrusted(owner.getUniqueId(), targetPlayer.getUniqueId())) {
+            return false;
+        }
+        // Don't target other minions of the same owner
+        String targetOwnerUUID = target.getPersistentDataContainer().get(OWNER_KEY, PersistentDataType.STRING);
+        return !(targetOwnerUUID != null && targetOwnerUUID.equals(owner.getUniqueId().toString()));
+    }
 
     private void applyBuffs(Mob mob) {
         AttributeInstance healthAttr = mob.getAttribute(Attribute.MAX_HEALTH);
-        if (healthAttr != null && healthAttr.getBaseValue() < 40.0) {
+        if (healthAttr != null) {
             healthAttr.setBaseValue(40.0);
             mob.setHealth(40.0);
         }
 
         AttributeInstance dmgAttr = mob.getAttribute(Attribute.ATTACK_DAMAGE);
-        if (dmgAttr != null && dmgAttr.getBaseValue() < 10.0) {
-            dmgAttr.setBaseValue(10.0);
+        if (dmgAttr != null) {
+            dmgAttr.setBaseValue(10.0); // Note: This primarily affects melee, bow damage is from enchantments.
         }
-
     }
 
     private void createBoneEffect(Player player) {
@@ -191,78 +289,6 @@ public class RibTrim implements Listener {
             double z = Math.sin(angle) * 5;
             Location particleLoc = loc.clone().add(x, 0.5, z);
             world.spawnParticle(Particle.BLOCK, particleLoc, 5, 0.2, 0.2, 0.2, 0, Bukkit.createBlockData(Material.BONE_BLOCK));
-        }
-
-        for (double y = 0; y < 2; y += 0.2) {
-            double angle = y * Math.PI * 4;
-            double radius = 5 * (1 - y / 2);
-            double x = Math.cos(angle) * radius;
-            double z = Math.sin(angle) * radius;
-            Location particleLoc = loc.clone().add(x, y + 0.5, z);
-            world.spawnParticle(Particle.FALLING_DUST, particleLoc, 3, 0.1, 0.1, 0.1, 0, Bukkit.createBlockData(Material.BONE_BLOCK));
-        }
-
-        world.spawnParticle(Particle.EXPLOSION, loc.clone().add(0, 1, 0), 1);
-        world.spawnParticle(Particle.SMOKE, loc.clone().add(0, 1, 0), 8, 0.3, 0.3, 0.3, 0.01);
-    }
-
-    @EventHandler
-    public void onPlayerAttack(EntityDamageByEntityEvent event) {
-        if (event.getDamager() instanceof Player player && event.getEntity() instanceof LivingEntity target) {
-            UUID ownerUUID = player.getUniqueId();
-            Player ribUser = player;
-
-            if (target instanceof Player targetPlayer && trustManager.isTrusted(ribUser.getUniqueId(), targetPlayer.getUniqueId())) {
-                playerTargetMap.remove(ownerUUID); // Don't set trusted players as target
-                return;
-            }
-
-            if (target.getType() == EntityType.BOGGED) {
-                String targetOwner = target.getPersistentDataContainer().get(new NamespacedKey(plugin, "owner"), PersistentDataType.STRING);
-                if (targetOwner != null && targetOwner.equals(ownerUUID.toString())) {
-                    return; // Don't target own summoned entities
-                }
-            }
-
-            playerTargetMap.put(ownerUUID, target);
-
-            if (playerBoggedMap.containsKey(ownerUUID)) {
-                for (Mob bogged : playerBoggedMap.get(ownerUUID)) {
-                    if (bogged.isValid() && target.isValid() && !target.equals(player)) {
-                        if (target instanceof Player targetPlayer && trustManager.isTrusted(ribUser.getUniqueId(), targetPlayer.getUniqueId())) {
-                            continue; // Don't target trusted players
-                        }
-                        bogged.setTarget(target);
-                    }
-                }
-            }
-        }
-    }
-
-    @EventHandler
-    public void onEntityTarget(EntityTargetEvent event) {
-        if (event.getEntity() instanceof Mob bogged && bogged.getType() == EntityType.BOGGED) {
-            String ownerUUID = bogged.getPersistentDataContainer().get(new NamespacedKey(plugin, "owner"), PersistentDataType.STRING);
-            if (ownerUUID == null) return;
-            Player owner = Bukkit.getPlayer(UUID.fromString(ownerUUID));
-            if (owner == null) return;
-
-            if (event.getTarget() instanceof Player target && trustManager.isTrusted(owner.getUniqueId(), target.getUniqueId())) {
-                event.setCancelled(true); // Don't target trusted players
-                return;
-            }
-
-            if (event.getTarget() instanceof Player target && target.getUniqueId().toString().equals(ownerUUID)) {
-                event.setCancelled(true); // Don't target owner
-                return;
-            }
-
-            if (event.getTarget() instanceof Mob targetMob && targetMob.getType() == EntityType.BOGGED) {
-                String targetOwner = targetMob.getPersistentDataContainer().get(new NamespacedKey(plugin, "owner"), PersistentDataType.STRING);
-                if (targetOwner != null && targetOwner.equals(ownerUUID)) {
-                    event.setCancelled(true); // Don't target other owned entities
-                }
-            }
         }
     }
 }

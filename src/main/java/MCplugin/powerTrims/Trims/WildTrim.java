@@ -50,6 +50,13 @@ public class WildTrim implements Listener {
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
 
+    // --- CONSTANTS ---
+    private final int TRIGGER_HEALTH = 8; // 4 hearts (4 HP)
+    private final int COOLDOWN_TIME = 20; // Cooldown in seconds
+    private final Map<UUID, Long> cooldowns = new HashMap<>();
+    private final Set<UUID> frozenEntities = new HashSet<>();
+
+
     public WildTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
@@ -190,14 +197,6 @@ public class WildTrim implements Listener {
         }
     }
 
-
-
-
-
-    private final int TRIGGER_HEALTH = 8; // 4 hearts (4 HP)
-    private final int COOLDOWN_TIME = 20; // Cooldown in seconds
-    private final Map<UUID, Long> cooldowns = new HashMap<>();
-    private final Set<UUID> frozenEntities = new HashSet<>();
 
 
 

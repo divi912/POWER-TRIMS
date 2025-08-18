@@ -21,6 +21,8 @@
 
 package MCplugin.powerTrims.Logic;
 
+import me.clip.placeholderapi.PlaceholderAPI;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -89,30 +91,43 @@ public class PersistentTrustManager {
         }
     }
 
+    private void sendMessage(CommandSender sender, String message, String... replacements) {
+        if (sender instanceof Player) {
+            Player player = (Player) sender;
+            if (Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) {
+                message = PlaceholderAPI.setPlaceholders(player, message);
+            } else {
+                for (int i = 0; i < replacements.length; i += 2) {
+                    message = message.replace(replacements[i], replacements[i + 1]);
+                }
+            }
+            player.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
+        } else {
+            for (int i = 0; i < replacements.length; i += 2) {
+                message = message.replace(replacements[i], replacements[i + 1]);
+            }
+            sender.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
+        }
+    }
+
     public void trustPlayer(UUID player, UUID trusted, CommandSender sender) {
         Set<UUID> trustList = trustedPlayers.computeIfAbsent(player, k -> new HashSet<>());
         if (trustList.contains(trusted)) {
-            if (sender instanceof Player) {
-                sender.sendMessage(ChatColor.YELLOW + "Player is already trusted.");
-            }
+            sendMessage(sender, "&ePlayer is already trusted.");
             return;
         }
         trustList.add(trusted);
         clearConfig(); // Clear config *before* saving
         saveTrusts();
-        if (sender instanceof Player) {
-            Player trustedPlayer = plugin.getServer().getPlayer(trusted);
-            String trustedName = (trustedPlayer != null) ? trustedPlayer.getName() : trusted.toString().substring(0, 8);
-            sender.sendMessage(ChatColor.GREEN + "You have trusted " + trustedName + ".");
-        }
+        Player trustedPlayer = plugin.getServer().getPlayer(trusted);
+        String trustedName = (trustedPlayer != null) ? trustedPlayer.getName() : trusted.toString().substring(0, 8);
+        sendMessage(sender, "&aYou have trusted " + trustedName + ".", "%player%", trustedName);
     }
 
     public void untrustPlayer(UUID player, UUID trusted, CommandSender sender) {
         Set<UUID> trustList = trustedPlayers.get(player);
         if (trustList == null || !trustList.contains(trusted)) {
-            if (sender instanceof Player) {
-                sender.sendMessage(ChatColor.YELLOW + "Player is not currently trusted.");
-            }
+            sendMessage(sender, "&ePlayer is not currently trusted.");
             return;
         }
         trustList.remove(trusted);
@@ -121,11 +136,9 @@ public class PersistentTrustManager {
         }
         clearConfig(); // Clear config *before* saving
         saveTrusts();
-        if (sender instanceof Player) {
-            Player untrustedPlayer = plugin.getServer().getPlayer(trusted);
-            String untrustedName = (untrustedPlayer != null) ? untrustedPlayer.getName() : trusted.toString().substring(0, 8);
-            sender.sendMessage(ChatColor.RED + "You have untrusted " + untrustedName + ".");
-        }
+        Player untrustedPlayer = plugin.getServer().getPlayer(trusted);
+        String untrustedName = (untrustedPlayer != null) ? untrustedPlayer.getName() : trusted.toString().substring(0, 8);
+        sendMessage(sender, "&cYou have untrusted " + untrustedName + ".", "%player%", untrustedName);
     }
 
     public boolean isTrusted(UUID owner, UUID other) {
@@ -138,20 +151,15 @@ public class PersistentTrustManager {
 
     public void showTrustList(UUID player, CommandSender sender) {
         Set<UUID> trustedList = trustedPlayers.getOrDefault(player, Collections.emptySet());
-        if (sender instanceof Player) {
-            Player owner = (Player) sender;
-            if (trustedList.isEmpty()) {
-                owner.sendMessage(ChatColor.GRAY + "You have no currently trusted players.");
-                return;
-            }
-            owner.sendMessage(ChatColor.YELLOW + "Your trusted players:");
-            for (UUID trustedUUID : trustedList) {
-                Player trustedPlayer = plugin.getServer().getPlayer(trustedUUID);
-                String trustedName = (trustedPlayer != null) ? trustedPlayer.getName() : trustedUUID.toString().substring(0, 8);
-                owner.sendMessage(ChatColor.GREEN + "- " + trustedName);
-            }
-        } else {
-            sender.sendMessage("Trusted players for UUID " + player + ": " + trustedList);
+        if (trustedList.isEmpty()) {
+            sendMessage(sender, "&7You have no currently trusted players.");
+            return;
+        }
+        sendMessage(sender, "&eYour trusted players:");
+        for (UUID trustedUUID : trustedList) {
+            Player trustedPlayer = plugin.getServer().getPlayer(trustedUUID);
+            String trustedName = (trustedPlayer != null) ? trustedPlayer.getName() : trustedUUID.toString().substring(0, 8);
+            sendMessage(sender, "&a- " + trustedName, "%player%", trustedName);
         }
     }
 }

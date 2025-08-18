@@ -21,10 +21,15 @@
 
 
 
+
+
+
+
 package MCplugin.powerTrims;
 
 import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.Trims.*;
+import MCplugin.powerTrims.integrations.PlaceholderIntegration;
 import com.jeff_media.armorequipevent.ArmorEquipEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -50,6 +55,10 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         trustManager = new PersistentTrustManager(this);
         dataManager = new DataManager(this);
         cooldownManager = new TrimCooldownManager(this);
+
+        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+            new PlaceholderIntegration(this).register();
+        }
 
         // Register trim abilities first to use below
         registerTrimAbilities();
@@ -150,6 +159,12 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        // Clear scoreboards for all online players to prevent them from getting stuck.
+        if (cooldownManager != null) {
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                cooldownManager.removeScoreboard(player);
+            }
+        }
 
         if (trustManager != null) {
             trustManager.saveTrusts();
@@ -169,5 +184,9 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
     public DataManager getDataManager() {
         return dataManager;
+    }
+
+    public TrimCooldownManager getCooldownManager() {
+        return cooldownManager;
     }
 }
