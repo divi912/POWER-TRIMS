@@ -82,6 +82,9 @@ public class RaiserTrim implements Listener {
             return;
         }
 
+        // Apply cooldown immediately
+        cooldownManager.setCooldown(player, TrimPattern.RAISER, SURGE_COOLDOWN);
+
         // Launch the player upward
         player.setVelocity(new Vector(0, PLAYER_UPWARD_BOOST, 0));
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.0f);
@@ -141,9 +144,6 @@ public class RaiserTrim implements Listener {
                 targetPlayer.sendMessage(ChatColor.DARK_PURPLE + "Raiser's Surge disrupted your teleportation!");
             }
         }
-
-        // Set ability cooldown now that the ability is complete
-        cooldownManager.setCooldown(player, TrimPattern.RAISER, SURGE_COOLDOWN);
     }
 
     /**
