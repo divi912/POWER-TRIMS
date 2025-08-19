@@ -29,7 +29,7 @@ public class SentryTrim implements Listener {
     private final int activationSlot;
 
     // --- CONSTANTS ---
-    private static final int ARROW_COUNT = 4;
+    private static final int ARROW_COUNT = 3;
     private static final double SPREAD = 0.15;
     private static final int COOLDOWN = 90 * 1000; // 90 seconds
 
@@ -131,7 +131,7 @@ public class SentryTrim implements Listener {
         event.setCancelled(true);
 
         // Apply true damage (bypasses armor, enchantments, and resistance)
-        double trueDamage = 1.0; // Adjust as needed
+        double trueDamage = 0.5; // Adjust as needed
         double newHealth = Math.max(0, target.getHealth() - trueDamage);
         target.setHealth(newHealth);
         target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 200, 1, false, true, true));

@@ -120,9 +120,9 @@ public class VexTrim implements Listener {
                             continue; // Skip trusted players
                         }
                         target.damage(8.0, vexUser);
-                        target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 300, 1));
-                        target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 200, 1));
-                        target.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 300, 0));
+                        target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 400, 1));
+                        target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 400, 1));
+                        target.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 400, 0));
                         target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 100, 0));
                     }
                 }

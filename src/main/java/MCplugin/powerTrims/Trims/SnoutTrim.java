@@ -121,7 +121,7 @@ public class SnoutTrim implements Listener {
 
                 // Give weapon
                 ItemStack weapon = new ItemStack(Material.NETHERITE_SWORD);
-                weapon.addUnsafeEnchantment(Enchantment.SHARPNESS, 5);
+                weapon.addUnsafeEnchantment(Enchantment.SHARPNESS, 3);
                 Objects.requireNonNull(skel.getEquipment()).setItemInMainHand(weapon);
                 skel.getEquipment().setItemInMainHandDropChance(0.0f);
             });

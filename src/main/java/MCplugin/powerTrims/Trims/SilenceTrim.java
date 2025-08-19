@@ -54,7 +54,7 @@ public class SilenceTrim implements Listener {
 
     private static final long WARDENS_ECHO_COOLDOWN_MS = 120_000L; // 2 minutes
     private static final double PRIMARY_RADIUS = 15.0;
-    private static final int POTION_DURATION_TICKS = 300; // 15 seconds
+    private static final int POTION_DURATION_TICKS = 400; // 20 seconds
     private static final int PEARL_COOLDOWN_TICKS = 200; // 10 seconds
     private static final double ECHO_RADIUS = 6.0;
     private static final int ECHO_EFFECT_DURATION_TICKS = 300;

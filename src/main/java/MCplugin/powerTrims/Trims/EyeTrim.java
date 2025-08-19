@@ -52,6 +52,7 @@ public class EyeTrim implements Listener {
     private static final int TRUE_SIGHT_DURATION_TICKS = 600; // 30 seconds
     private static final long TRUE_SIGHT_COOLDOWN = 120_000L; // 2 minutes
     private static final long TASK_INTERVAL_TICKS = 20L; // Run task once per second
+    private static final double TRUE_SIGHT_VERTICAL_RADIUS = 50.0;
     private final int activationSlot;
 
     // --- STATE MANAGEMENT ---
@@ -102,7 +103,7 @@ public class EyeTrim implements Listener {
                 }
 
                 // OPTIMIZATION: Scan for nearby entities
-                for (Entity entity : player.getNearbyEntities(TRUE_SIGHT_RADIUS, TRUE_SIGHT_RADIUS, TRUE_SIGHT_RADIUS)) {
+                for (Entity entity : player.getNearbyEntities(TRUE_SIGHT_RADIUS, TRUE_SIGHT_VERTICAL_RADIUS, TRUE_SIGHT_RADIUS)) {
                     if (entity instanceof LivingEntity target && !target.equals(player)) {
                         // Skip trusted players
                         if (target instanceof Player targetPlayer && trustManager.isTrusted(player.getUniqueId(), targetPlayer.getUniqueId())) {

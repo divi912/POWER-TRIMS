@@ -15,4 +15,7 @@ commands:
   trustlist:
     description: View your list of trusted players.
     usage: /<command>
-
+  resettrimcooldowns:
+    description: Resets all of your trim cooldowns.
+    usage: /<command>
+    permission: powertrims.resetcooldowns

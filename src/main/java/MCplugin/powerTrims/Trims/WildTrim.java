@@ -33,7 +33,6 @@ import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -89,9 +88,12 @@ public class WildTrim implements Listener {
                 entity -> entity instanceof LivingEntity && entity != wildUser
         );
 
+        // Grapple to the entity under the crosshair
         if (entityHit != null && entityHit.getHitEntity() instanceof LivingEntity targetEntity) {
             if (targetEntity instanceof Player targetPlayer && trustManager.isTrusted(wildUser.getUniqueId(), targetPlayer.getUniqueId())) {
-                player.sendMessage(ChatColor.YELLOW + "§8[§cWild§8] Cannot grapple trusted player.");
+                player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] Grappling to trusted player!");
+                visualizeGrapple(player, targetEntity.getLocation().add(0, 1, 0));
+                smoothlyPullPlayer(player, targetEntity.getLocation().add(0, 1, 0));
             } else {
                 // Grapple to the entity under the crosshair
                 player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] Grappling to entity!");
@@ -167,7 +169,7 @@ public class WildTrim implements Listener {
                 // Dynamically calculate pull vector for smoother motion
                 Vector pullVector = target.toVector().subtract(player.getLocation().toVector());
                 double length = pullVector.length();
-                double speed = Math.min(maxSpeed, length * 0.35); // Adjusted speed factor
+                double speed = Math.min(maxSpeed, length * 0.28); // Adjusted speed factor
 
                 player.setVelocity(pullVector.normalize().multiply(speed));
 

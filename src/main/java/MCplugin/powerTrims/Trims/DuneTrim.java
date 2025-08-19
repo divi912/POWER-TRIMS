@@ -80,10 +80,10 @@ public class DuneTrim implements Listener {
 
         for (int k = 0; k < 50; k++) {
             double angle = Math.random() * 2 * Math.PI;
-            double distance = Math.random() * 1.0;
+            double distance = Math.random();
             double offsetX = Math.cos(angle) * distance;
             double offsetZ = Math.sin(angle) * distance;
-            Location burstLoc = center.clone().add(offsetX, Math.random() * 1.0, offsetZ);
+            Location burstLoc = center.clone().add(offsetX, Math.random(), offsetZ);
             world.spawnParticle(Particle.CRIT, burstLoc, 1, 0, 0, 0, 0);
         }
     }

@@ -29,6 +29,7 @@ package MCplugin.powerTrims;
 
 import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.Trims.*;
+import MCplugin.powerTrims.commands.ResetCooldownsCommand;
 import MCplugin.powerTrims.integrations.PlaceholderIntegration;
 import com.jeff_media.armorequipevent.ArmorEquipEvent;
 import org.bukkit.Bukkit;
@@ -72,6 +73,7 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         // Register commands
         getCommand("trust").setExecutor(this);
         getCommand("untrust").setExecutor(this);
+        getCommand("resettrimcooldowns").setExecutor(new ResetCooldownsCommand(this));
 
         // Stylish startup message
         getLogger().info(ChatColor.GREEN + "--------------------------------------");

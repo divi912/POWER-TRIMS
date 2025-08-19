@@ -171,6 +171,25 @@ public class TrimCooldownManager {
         return Math.max(0, remaining);
     }
 
+    public void resetAllCooldowns(Player player) {
+        dataManager.setCooldown(player,  TrimPattern.SILENCE, 0);
+        dataManager.setCooldown(player, TrimPattern.SPIRE, 0);
+        dataManager.setCooldown(player, TrimPattern.WAYFINDER, 0);
+        dataManager.setCooldown(player, TrimPattern.RAISER, 0);
+        dataManager.setCooldown(player, TrimPattern.DUNE, 0);
+        dataManager.setCooldown(player, TrimPattern.HOST, 0);
+        dataManager.setCooldown(player, TrimPattern.COAST, 0);
+        dataManager.setCooldown(player, TrimPattern.FLOW, 0);
+        dataManager.setCooldown(player, TrimPattern.RIB, 0);
+        dataManager.setCooldown(player, TrimPattern.SENTRY, 0);
+        dataManager.setCooldown(player, TrimPattern.WILD, 0);
+        dataManager.setCooldown(player, TrimPattern.WARD, 0);
+        dataManager.setCooldown(player, TrimPattern.EYE, 0);
+        dataManager.setCooldown(player, TrimPattern.TIDE, 0);
+        dataManager.setCooldown(player, TrimPattern.SNOUT, 0);
+        dataManager.setCooldown(player, TrimPattern.VEX, 0);
+    }
+
     public String getTrimDisplayName(TrimPattern pattern) {
         if (pattern == TrimPattern.SILENCE) {
             return "Silence";
