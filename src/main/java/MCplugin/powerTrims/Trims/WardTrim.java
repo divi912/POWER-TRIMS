@@ -55,6 +55,7 @@ public class WardTrim implements Listener {
     private static final int ABSORPTION_LEVEL = 4; // Absorption V (increased from III)
     private static final int RESISTANCE_BOOST_LEVEL = 2; // Resistance III (increased from II)
     private final Set<UUID> activeBarriers = new HashSet<>();
+    private final int activationSlot;
 
     private static final Component PREFIX = Component.text()
             .append(Component.text("[", NamedTextColor.DARK_GRAY))
@@ -68,6 +69,7 @@ public class WardTrim implements Listener {
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "ward_trim_effect");
+        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
     }
 
 
@@ -173,9 +175,8 @@ public class WardTrim implements Listener {
 
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        Player player = event.getPlayer();
-        if (player.isSneaking() && event.getNewSlot() == 8) {
-            WardPrimary(player);
+        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
+            WardPrimary(event.getPlayer());
         }
     }
 }

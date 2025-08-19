@@ -47,10 +47,10 @@ public class RibTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
+    private final int activationSlot;
 
     // --- CONSTANTS ---
     private static final long RIB_COOLDOWN = 60_000L; // 1 minute
-    private static final int ACTIVATION_SLOT = 8;
     private static final long MINION_LIFESPAN_TICKS = 1200L; // 60 seconds
     private static final NamespacedKey OWNER_KEY;
 
@@ -68,12 +68,13 @@ public class RibTrim implements Listener {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
+        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        if (event.getNewSlot() == ACTIVATION_SLOT && event.getPlayer().isSneaking()) {
+        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
             activateRibPrimary(event.getPlayer());
         }
     }

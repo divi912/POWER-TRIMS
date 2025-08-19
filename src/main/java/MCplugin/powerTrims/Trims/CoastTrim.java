@@ -26,6 +26,7 @@ public class CoastTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
+    private final int activationSlot;
 
     // --- Ability Constants ---
     // Behavior
@@ -42,13 +43,11 @@ public class CoastTrim implements Listener {
     private static final int SPEED_AMPLIFIER = 1;
     private static final int RESISTANCE_AMPLIFIER = 0;
 
-    // Trigger
-    private static final int ACTIVATION_SLOT = 8; // The 9th hotbar slot
-
     public CoastTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
+        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
     }
 
     // Activates the Coast Trim ability: Water Burst
@@ -163,7 +162,7 @@ public class CoastTrim implements Listener {
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
         Player player = event.getPlayer();
-        if (player.isSneaking() && event.getNewSlot() == ACTIVATION_SLOT) {
+        if (player.isSneaking() && event.getNewSlot() == activationSlot) {
             CoastPrimary(player);
         }
     }

@@ -42,12 +42,13 @@ public class WayfinderTrim implements Listener {
     private final NamespacedKey effectKey;
     private static final long TELEPORT_COOLDOWN = 120000; // 2 minutes cooldown
     private final Map<UUID, Location> markedLocations = new HashMap<>();
+    private final int activationSlot;
 
     public WayfinderTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.effectKey = new NamespacedKey(plugin, "wayfinder_trim_effect");
-
+        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
     }
 
 
@@ -86,9 +87,8 @@ public class WayfinderTrim implements Listener {
 
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        Player player = event.getPlayer();
-        if (player.isSneaking() && event.getNewSlot() == 8) {
-            WayfinderPrimary(player);
+        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
+            WayfinderPrimary(event.getPlayer());
         }
     }
 }

@@ -26,6 +26,8 @@ public class FlowTrim implements Listener {
     private final TrimCooldownManager cooldownManager;
     private final NamespacedKey effectKey;
     private final NamespacedKey dashEndFallImmunityKey;
+    private final int activationSlot;
+
 
     // --- CONSTANTS ---
     // Heart cost settings
@@ -41,7 +43,7 @@ public class FlowTrim implements Listener {
         this.cooldownManager = cooldownManager;
         this.effectKey = new NamespacedKey(plugin, "flow_trim_effect");
         this.dashEndFallImmunityKey = new NamespacedKey(plugin, "flow_trim_dash_end_immune");
-
+        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
     }
 
 
@@ -135,7 +137,7 @@ public class FlowTrim implements Listener {
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
         Player player = event.getPlayer();
-        if (player.isSneaking() && event.getNewSlot() == 8) {
+        if (player.isSneaking() && event.getNewSlot() == activationSlot) {
             FlowPrimary(player);
         }
     }

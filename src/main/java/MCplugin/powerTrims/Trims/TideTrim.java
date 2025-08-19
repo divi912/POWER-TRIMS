@@ -43,6 +43,7 @@ public class TideTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
+    private final int activationSlot;
 
     // --- CONSTANTS ---
     private static final long TIDE_COOLDOWN = 120_000L; // 2 minutes
@@ -52,18 +53,18 @@ public class TideTrim implements Listener {
     private static final int WALL_HEIGHT = 6;
     private static final int MOVE_DELAY_TICKS = 2;
     private static final int MAX_MOVES = 20;
-    private static final int ACTIVATION_SLOT = 8;
 
     public TideTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
+        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        if (event.getNewSlot() == ACTIVATION_SLOT && event.getPlayer().isSneaking()) {
+        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
             activateTidePrimary(event.getPlayer());
         }
     }

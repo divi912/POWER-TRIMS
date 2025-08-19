@@ -49,6 +49,7 @@ public class WildTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
+    private final int activationSlot;
 
     // --- CONSTANTS ---
     private final int TRIGGER_HEALTH = 8; // 4 hearts (4 HP)
@@ -61,6 +62,7 @@ public class WildTrim implements Listener {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
+        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
     }
 
 
@@ -189,11 +191,9 @@ public class WildTrim implements Listener {
 
 
     @EventHandler
-    public void onHotbarSwitch (PlayerItemHeldEvent event){
-        Player player = event.getPlayer();
-
-        if (player.isSneaking() && event.getNewSlot() == 8) {
-            WildPrimary(player);
+    public void onHotbarSwitch(PlayerItemHeldEvent event) {
+        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
+            WildPrimary(event.getPlayer());
         }
     }
 

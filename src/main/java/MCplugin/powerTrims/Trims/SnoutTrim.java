@@ -53,10 +53,10 @@ public class SnoutTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
+    private final int activationSlot;
 
     // --- CONSTANTS ---
     private static final long ROAR_COOLDOWN = 120_000L; // 2 minutes
-    private static final int ACTIVATION_SLOT = 8;
     private static final long MINION_LIFESPAN_TICKS = 1800L; // 90 seconds
     private static final NamespacedKey SUMMONER_KEY;
 
@@ -74,12 +74,13 @@ public class SnoutTrim implements Listener {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
+        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        if (event.getNewSlot() == ACTIVATION_SLOT && event.getPlayer().isSneaking()) {
+        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
             activateSnoutPrimary(event.getPlayer());
         }
     }

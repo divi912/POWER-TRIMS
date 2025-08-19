@@ -26,12 +26,12 @@ public class HostTrim implements Listener {
 
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
+    private final int activationSlot;
 
     // --- CONSTANTS ---
     private static final long ESSENCE_REAPER_COOLDOWN = 120_000L; // 2 minutes
     private static final double EFFECT_STEAL_RADIUS = 10.0;
     private static final double HEALTH_STEAL_AMOUNT = 4.0; // 2 hearts
-    private static final int ACTIVATION_SLOT = 8; // 9th hotbar slot
     private static final double PARTICLE_DENSITY = 4.0; // Particles per block
 
     // Using Sets for efficient 'contains' checks and better readability
@@ -49,6 +49,7 @@ public class HostTrim implements Listener {
     public HostTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
+        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
@@ -72,7 +73,7 @@ public class HostTrim implements Listener {
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
         // Use the constant and check both conditions
-        if (event.getNewSlot() == ACTIVATION_SLOT && event.getPlayer().isSneaking()) {
+        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
             activateHostPrimary(event.getPlayer());
         }
     }

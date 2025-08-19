@@ -51,6 +51,7 @@ public class SpireTrim implements Listener {
     private final NamespacedKey vulnerableKey;
     private final Set<UUID> markedTargets;
     private final Set<UUID> dashingPlayers;
+    private final int activationSlot;
 
     // --- CONSTANTS ---
     private static final int DASH_DISTANCE = 8;
@@ -69,6 +70,7 @@ public class SpireTrim implements Listener {
         this.vulnerableKey = new NamespacedKey(plugin, "spire_vulnerable_effect");
         this.markedTargets = new HashSet<>();
         this.dashingPlayers = new HashSet<>();
+        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
     }
 
 
@@ -248,7 +250,7 @@ public class SpireTrim implements Listener {
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
         Player player = event.getPlayer();
-        if (player.isSneaking() && event.getNewSlot() == 8) {
+        if (player.isSneaking() && event.getNewSlot() == activationSlot) {
             SpirePrimary(player);
         }
     }

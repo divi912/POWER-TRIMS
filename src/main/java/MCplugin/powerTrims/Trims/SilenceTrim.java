@@ -46,6 +46,7 @@ public class SilenceTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
+    private final int activationSlot;
 
     // --- STATE & CONSTANTS ---
     // Simplified cooldown maps. AtomicLong and ConcurrentHashMap are overkill here.
@@ -58,18 +59,18 @@ public class SilenceTrim implements Listener {
     private static final double ECHO_RADIUS = 6.0;
     private static final int ECHO_EFFECT_DURATION_TICKS = 300;
     private static final int MAX_AFFECTED_ENTITIES = 30;
-    private static final int ACTIVATION_SLOT = 8;
 
     public SilenceTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
+        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        if (event.getNewSlot() == ACTIVATION_SLOT && event.getPlayer().isSneaking()) {
+        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
             activateSilencePrimary(event.getPlayer());
         }
     }

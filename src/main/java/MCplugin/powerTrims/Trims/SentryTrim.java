@@ -26,6 +26,7 @@ public class SentryTrim implements Listener {
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final NamespacedKey effectKey;
     private final Set<UUID> activeGuards;
+    private final int activationSlot;
 
     // --- CONSTANTS ---
     private static final int ARROW_COUNT = 4;
@@ -38,6 +39,7 @@ public class SentryTrim implements Listener {
         this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "sentry_trim_effect");
         this.activeGuards = new HashSet<>();
+        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
     }
 
 
@@ -167,7 +169,7 @@ public class SentryTrim implements Listener {
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
         Player player = event.getPlayer();
-        if (player.isSneaking() && event.getNewSlot() == 8) {
+        if (player.isSneaking() && event.getNewSlot() == activationSlot) {
             SentryPrimary(player);
         }
     }

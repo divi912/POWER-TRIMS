@@ -48,10 +48,10 @@ public class RaiserTrim implements Listener {
     private final PersistentTrustManager trustManager;
 
     // --- CONSTANTS ---
-    private static final long SURGE_COOLDOWN = 120_000L; // 2 minutes
+    private static final long SURGE_COOLDOWN = 120000; // 2 minutes
     private static final double ENTITY_PULL_RADIUS = 15.0;
     private static final double PLAYER_UPWARD_BOOST = 1.5;
-    private static final int ACTIVATION_SLOT = 8;
+    private final int activationSlot;
     private static final int PEARL_COOLDOWN_TICKS = 200; // 10 seconds
 
     // --- STATE MANAGEMENT ---
@@ -63,11 +63,12 @@ public class RaiserTrim implements Listener {
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
+        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
     }
 
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        if (event.getNewSlot() == ACTIVATION_SLOT && event.getPlayer().isSneaking()) {
+        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
             activateRaiserPrimary(event.getPlayer());
         }
     }

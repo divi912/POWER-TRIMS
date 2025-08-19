@@ -43,6 +43,7 @@ public class DuneTrim implements Listener {
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final NamespacedKey effectKey;
+    private final int activationSlot;
     private static final int SANDSTORM_RADIUS = 12;
     private static final int SANDSTORM_DAMAGE = 10;
     private static final long SANDSTORM_COOLDOWN = 60000; // 1 minutes
@@ -52,6 +53,7 @@ public class DuneTrim implements Listener {
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
         this.effectKey = new NamespacedKey(plugin, "dune_trim_effect");
+        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
     }
 
 
@@ -138,7 +140,7 @@ public class DuneTrim implements Listener {
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
         Player player = event.getPlayer();
-        if (player.isSneaking() && event.getNewSlot() == 8) {
+        if (player.isSneaking() && event.getNewSlot() == activationSlot) {
             DunePrimary(player);
         }
     }

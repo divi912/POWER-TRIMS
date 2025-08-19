@@ -52,7 +52,7 @@ public class EyeTrim implements Listener {
     private static final int TRUE_SIGHT_DURATION_TICKS = 600; // 30 seconds
     private static final long TRUE_SIGHT_COOLDOWN = 120_000L; // 2 minutes
     private static final long TASK_INTERVAL_TICKS = 20L; // Run task once per second
-    private static final int ACTIVATION_SLOT = 8;
+    private final int activationSlot;
 
     // --- STATE MANAGEMENT ---
     private final Map<UUID, BukkitRunnable> activeTrueSightTasks = new HashMap<>();
@@ -61,12 +61,13 @@ public class EyeTrim implements Listener {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
+        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        if (event.getNewSlot() == ACTIVATION_SLOT && event.getPlayer().isSneaking()) {
+        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
             activateEyePrimary(event.getPlayer());
         }
     }

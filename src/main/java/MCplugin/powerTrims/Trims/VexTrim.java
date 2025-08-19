@@ -49,6 +49,8 @@ public class VexTrim implements Listener {
     private static final long COOLDOWN_TIME = 120000; // 20 seconds cooldown
     private static final long HIDE_DURATION = 10000; // 10 seconds hide duration
     private static VexTrim instance;
+    private final int activationSlot;
+
 
 
     private BukkitRunnable passiveTask;
@@ -59,7 +61,7 @@ public class VexTrim implements Listener {
         this.trustManager = trustManager; // Initialize the Trust Manager
         instance = this;
         Bukkit.getPluginManager().registerEvents(this, plugin);
-
+        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
     }
 
     public static VexTrim getInstance() {
@@ -69,9 +71,8 @@ public class VexTrim implements Listener {
 
     @EventHandler
     public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        Player player = event.getPlayer();
-        if (player.isSneaking() && event.getNewSlot() == 8) {
-            VexPrimary(player);
+        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
+            VexPrimary(event.getPlayer());
         }
     }
 
