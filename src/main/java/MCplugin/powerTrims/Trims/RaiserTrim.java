@@ -24,6 +24,7 @@ package MCplugin.powerTrims.Trims;
 import MCplugin.powerTrims.Logic.ArmourChecking;
 import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -79,6 +80,11 @@ public class RaiserTrim implements Listener {
     public void activateRaiserPrimary(Player player) {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.RAISER) ||
                 cooldownManager.isOnCooldown(player, TrimPattern.RAISER)) {
+            return;
+        }
+
+        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
+            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
             return;
         }
 

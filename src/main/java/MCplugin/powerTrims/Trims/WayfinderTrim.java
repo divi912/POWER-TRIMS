@@ -7,7 +7,7 @@
  * (at your option) any later version.
  *
  * [ POWER TRIMS ] is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * but WITHOUT ANY WARRANTY; without even the implied implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
@@ -23,6 +23,7 @@ package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -54,6 +55,10 @@ public class WayfinderTrim implements Listener {
 
 
     public void WayfinderPrimary(Player player) {
+        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
+            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            return;
+        }
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WAYFINDER)) {
             return;
         }

@@ -23,6 +23,7 @@ package MCplugin.powerTrims.Trims;
 import MCplugin.powerTrims.Logic.ArmourChecking;
 import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
@@ -81,6 +82,11 @@ public class RibTrim implements Listener {
 
     public void activateRibPrimary(Player player) {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.RIB) || cooldownManager.isOnCooldown(player, TrimPattern.RIB)) {
+            return;
+        }
+
+        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
+            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
             return;
         }
 

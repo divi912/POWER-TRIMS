@@ -3,6 +3,7 @@ package MCplugin.powerTrims.Trims;
 import MCplugin.powerTrims.Logic.ArmourChecking;
 import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.*;
@@ -54,6 +55,10 @@ public class CoastTrim implements Listener {
     public void CoastPrimary(Player player) {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.COAST)) return;
         if (cooldownManager.isOnCooldown(player, TrimPattern.COAST)) return;
+        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
+            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            return;
+        }
 
         Location playerLoc = player.getLocation();
         World world = player.getWorld();

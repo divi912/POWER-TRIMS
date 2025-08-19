@@ -2,6 +2,7 @@ package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -63,6 +64,12 @@ public class FlowTrim implements Listener {
             player.sendMessage("§8[§bFlow§8] §7Ability on cooldown!");
             return;
         }
+
+        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
+            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            return;
+        }
+
         player.setAllowFlight(true);
         // Activation effects
         Location loc = player.getLocation();

@@ -23,6 +23,7 @@ package MCplugin.powerTrims.Trims;
 import MCplugin.powerTrims.Logic.ArmourChecking;
 import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.entity.LivingEntity;
@@ -70,6 +71,10 @@ public class TideTrim implements Listener {
     }
 
     public void activateTidePrimary(Player player) {
+        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
+            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            return;
+        }
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.TIDE) ||
                 cooldownManager.isOnCooldown(player, TrimPattern.TIDE)) {
             return;

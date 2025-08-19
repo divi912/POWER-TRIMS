@@ -23,6 +23,7 @@ package MCplugin.powerTrims.Trims;
 import MCplugin.powerTrims.Logic.ArmourChecking;
 import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -76,6 +77,10 @@ public class EyeTrim implements Listener {
     public void activateEyePrimary(Player player) {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.EYE)) return;
         if (cooldownManager.isOnCooldown(player, TrimPattern.EYE)) return;
+        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
+            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            return;
+        }
 
         // Cancel any existing task for this player to prevent duplicates
         activeTrueSightTasks.computeIfPresent(player.getUniqueId(), (uuid, task) -> {

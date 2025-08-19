@@ -24,6 +24,7 @@ package MCplugin.powerTrims.Trims;
 import MCplugin.powerTrims.Logic.ArmourChecking;
 import MCplugin.powerTrims.Logic.PersistentTrustManager; 
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -75,6 +76,10 @@ public class SpireTrim implements Listener {
 
 
     public void SpirePrimary(Player player) {
+        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
+            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            return;
+        }
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.SPIRE)) return;
         if (cooldownManager.isOnCooldown(player, TrimPattern.SPIRE)) return;
 

@@ -31,6 +31,7 @@ import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.Trims.*;
 import MCplugin.powerTrims.commands.ResetCooldownsCommand;
 import MCplugin.powerTrims.integrations.PlaceholderIntegration;
+import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import com.jeff_media.armorequipevent.ArmorEquipEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -48,6 +49,19 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
     private DataManager dataManager;
     private PersistentTrustManager trustManager;
 
+
+    @Override
+    public void onLoad() {
+        // Register WorldGuard flags as early as possible.
+        // This is safe because the flag registry is available during the onLoad phase,
+        // before other plugins are fully enabled.
+        if (getServer().getPluginManager().getPlugin("WorldGuard") != null) {
+            getLogger().info("WorldGuard detected. Registering custom PowerTrims flags...");
+            WorldGuardIntegration.registerFlags();
+        }
+    }
+
+
     @Override
     public void onEnable() {
         saveDefaultConfig();
@@ -59,6 +73,10 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
         if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
             new PlaceholderIntegration(this).register();
+        }
+
+        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null) {
+            WorldGuardIntegration.registerFlags();
         }
 
         // Register trim abilities first to use below
