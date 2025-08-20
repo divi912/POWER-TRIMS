@@ -1,64 +1,59 @@
 # ✨ Power Trims ✨
 
+A Spigot plugin that grants unique, powerful abilities to each distinct Armor Trim set.
 
+## 🌟 Features
 
-## 🌟 Features 🌟
+| Feature | Description |
+| :--- | :--- |
+| **✨ Unique Abilities** | Every full set of trimmed armor unlocks a distinct, powerful ability. |
+| **⚙️ Highly Performant** | Recently overhauled for maximum efficiency with minimal impact on server performance. |
+| **🛡️ WorldGuard Integration** | Protect server regions by setting the custom flag `powertrims-abilities` to `deny`. |
+| **🔧 Highly Configurable** | A detailed `config.yml` allows you to customize every ability's cooldown, duration, etc. |
+| **🤝 Trust System** | A simple command-based system allows players to "trust" friends to avoid friendly fire. |
+| **✅ Broad Compatibility** | Full support for Spigot, Paper, and their forks. |
 
-| Feature                    | Description                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------ |
-| Unique Powers            | ✨ Unique and Fun Powers For Each Trimmed Armor Set                             |
-| Performance                | ⚡ Fast and Optimized                                                            |
-| Compatibility            | ✅ Paper, Spigot, And Bukkit Support                                            |
-| Crossplay Support          | 🛏️ Bedrock Support (Via Geyser) coming soon!                                            |
+## 🚀 Installation
 
+1. Download the current latest version from the [Github Page](https://github.com/divi912/POWER-TRIMS/releases/tag/v1.2.2).
 
+2. Place the `PowerTrims.jar` file into your server's `/plugins` folder.
 
-## ❓ FAQ ❓
+3. Restart your server. The default configuration file will be generated.
 
-#### 🤔 How Do I Use the Abilities?
+4. Have fun! 🎉
 
->   Shift + 9 (Move To the Ninth Hotbar Slot.)
+## 🎮 Getting Started
 
-#### ❓ How Many Trims Have Abilities?
+* **Armor Requirement:** To use an ability, you must wear a full set of armor (helmet, chestplate, leggings, and boots) with the **same trim pattern**.
 
->   Every Single Vanilla Trim (except bolt and shaper, will be coming soon)
+* **Activation:** The keybind is (Default: `Shift + F`).
 
-#### 🛠️ Do you Support Modded Trims / Are Planning To?
+## 🛠️ Configuration
 
->   No, but i am planning to add support for Forge and Fabric if people want it.
+Power Trims is designed to be highly customizable. In the `config.yml` file, you can:
 
+* Adjust the cooldown, duration, damage, and other values for every single ability to fit your server's needs.
+* change cooldown showing method in `config.yml` by changing `SCOREBOARD` to `ACTIONBAR` and vice-versa (default: `SCOREBOARD`)
 
+## 💬 Commands
 
-## 🚀 Installation 🚀
+| Command | Description | Permission |
+| ----- | ----- | ----- |
+| `/trust <player>` | Prevents your abilities from harming a player. | `powertrims.trust` |
+| `/untrust <player>` | Allows your abilities to harm a player again. | `powertrims.trust` |
+| `/trustlist` | Shows a list of players you have trusted. | `powertrims.trust` |
 
-Download [PowerTrims](https://example.com) And Add it into your Plugins' Folder on your Server
+## ℹ️ Support & Wiki
 
-Restart, and Have Fun! 🎉
+* For a complete guide on every ability, please visit the [**Official Wiki**](https://github.com/divi912/POWER-TRIMS/wiki).
 
+* Have questions, suggestions, or need help? Contact me on **Discord**: `_divi._` or open a new issue on this repo or ask in disscussions
 
-## 👨‍💻 Authors 👨‍💻
+## 🤝 Contributing
 
-* 👤 [@divi912](https://www.github.com/divi912)
+Contributing is currently closed, but feel free to submit [**Issues**](https://www.google.com/search?q=https://github.com/divi912/POWER-TRIMS/issues) for bug reports or feature requests!
 
+## 📜 License
 
-## ℹ️ Wiki / Info ℹ️
-
-View PowerTrims [Wiki](https://github.com/divi912/POWER-TRIMS/wiki)
-
-Our Wiki is For Users to See the ability Discriptions of
-all current trims.
-
-**PowerTrims Discord Coming Soon.** 💬
-
-
-## 🤝 Contributing 🤝
-
-🤝 Contributing Is Currently Closed as of Now, We might open it in the late future.
-Until Then, feel free to submit Pull Requests and Bug Reports. 🐛
-
-
-
-## 📜 License 📜
-
-📜 [GPLV3](https://github.com/divi912/POWER-TRIMS/blob/main/LICENSE)
-We use GNU General Public License v3.0 (GPLV3)
+This project is licensed under the [**GNU General Public License v3.0**](https://github.com/divi912/POWER-TRIMS/blob/main/LICENSE).
