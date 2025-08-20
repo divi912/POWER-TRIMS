@@ -38,11 +38,11 @@ Power Trims is designed to be highly customizable. In the `config.yml` file, you
 
 ## 💬 Commands
 
-| Command | Description | Permission |
-| ----- | ----- | ----- |
-| `/trust <player>` | Prevents your abilities from harming a player. | `powertrims.trust` |
-| `/untrust <player>` | Allows your abilities to harm a player again. | `powertrims.trust` |
-| `/trustlist` | Shows a list of players you have trusted. | `powertrims.trust` |
+| Command | Description 
+| ----- | ----- | 
+| `/trust <player>` | Prevents your abilities from harming a player. 
+| `/untrust <player>` | Allows your abilities to harm a player again. 
+| `/trustlist` | Shows a list of players you have trusted. 
 
 ## ℹ️ Support & Wiki
 
