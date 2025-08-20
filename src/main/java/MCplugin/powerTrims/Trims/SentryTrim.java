@@ -1,6 +1,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.ConfigManager;
 import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
@@ -10,6 +11,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.ProjectileHitEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -25,22 +27,28 @@ public class SentryTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
+    private final ConfigManager configManager;
     private final NamespacedKey effectKey;
     private final Set<UUID> activeGuards;
-    private final int activationSlot;
 
     // --- CONSTANTS ---
-    private static final int ARROW_COUNT = 3;
-    private static final double SPREAD = 0.15;
-    private static final int COOLDOWN = 90 * 1000; // 90 seconds
+    private final int ARROW_COUNT;
+    private final double SPREAD;
+    private final long COOLDOWN;
+    private final double TRUE_DAMAGE;
 
-    public SentryTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
+    public SentryTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
+        this.configManager = configManager;
         this.effectKey = new NamespacedKey(plugin, "sentry_trim_effect");
         this.activeGuards = new HashSet<>();
-        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
+
+        ARROW_COUNT = configManager.getInt("sentry.primary.arrow_count", 3);
+        SPREAD = configManager.getDouble("sentry.primary.spread", 0.15);
+        COOLDOWN = configManager.getLong("sentry.primary.cooldown", 90000);
+        TRUE_DAMAGE = configManager.getDouble("sentry.primary.true_damage", 0.5);
     }
 
 
@@ -137,8 +145,7 @@ public class SentryTrim implements Listener {
         event.setCancelled(true);
 
         // Apply true damage (bypasses armor, enchantments, and resistance)
-        double trueDamage = 0.5; // Adjust as needed
-        double newHealth = Math.max(0, target.getHealth() - trueDamage);
+        double newHealth = Math.max(0, target.getHealth() - TRUE_DAMAGE);
         target.setHealth(newHealth);
         target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 200, 1, false, true, true));
         target.addPotionEffect(new PotionEffect(PotionEffectType.HUNGER, 600, 1, false, true, true));
@@ -173,10 +180,14 @@ public class SentryTrim implements Listener {
 
 
     @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        Player player = event.getPlayer();
-        if (player.isSneaking() && event.getNewSlot() == activationSlot) {
-            SentryPrimary(player);
+    public void onOffhandPress(PlayerSwapHandItemsEvent event) {
+        // Check if the player is sneaking when they press the offhand key
+        if (event.getPlayer().isSneaking()) {
+            // This is important: it prevents the player's hands from actually swapping items
+            event.setCancelled(true);
+
+            // Activate the ability
+            SentryPrimary(event.getPlayer());
         }
     }
 }

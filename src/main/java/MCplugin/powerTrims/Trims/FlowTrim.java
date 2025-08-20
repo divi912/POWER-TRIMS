@@ -1,6 +1,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.ConfigManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
@@ -8,7 +9,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -20,31 +21,38 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Flow Trim Ability: Toggleable Gale Dash costs health continuously until deactivated.
+ * Flow Trim Ability: Toggleable Gale Dash costs health continuously until deactivated or duration expires.
  */
 public class FlowTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
+    private final ConfigManager configManager;
     private final NamespacedKey effectKey;
     private final NamespacedKey dashEndFallImmunityKey;
-    private final int activationSlot;
 
 
     // --- CONSTANTS ---
-    // Heart cost settings
-    private static final int HEART_COST_INTERVAL = 20;       // ticks (1 second)
-    private static final double HEART_COST_AMOUNT = 2.0;     // HP (1 heart)
-    private static final long DASH_COOLDOWN = 60000;         // ms
+    private final int HEART_COST_INTERVAL;
+    private final double HEART_COST_AMOUNT;
+    private final long DASH_COOLDOWN;
+    // --- NEW: Added duration constant ---
+    private final int DASH_DURATION;
 
     private final Map<UUID, BukkitRunnable> dashTasks = new HashMap<>();
     private final Map<UUID, Boolean> isDashing = new HashMap<>();
 
-    public FlowTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+    public FlowTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, ConfigManager configManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
+        this.configManager = configManager;
         this.effectKey = new NamespacedKey(plugin, "flow_trim_effect");
         this.dashEndFallImmunityKey = new NamespacedKey(plugin, "flow_trim_dash_end_immune");
-        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
+
+
+        HEART_COST_INTERVAL = configManager.getInt("flow.primary.heart_cost_interval", 20);
+        HEART_COST_AMOUNT = configManager.getDouble("flow.primary.heart_cost_amount", 2.0);
+        DASH_COOLDOWN = configManager.getLong("flow.primary.cooldown", 60000);
+        DASH_DURATION = configManager.getInt("flow.primary.duration", 400);
     }
 
 
@@ -88,6 +96,13 @@ public class FlowTrim implements Listener {
                     return;
                 }
 
+                // --- NEW: Deactivate if duration runs out ---
+                if (tickCount >= DASH_DURATION) {
+                    deactivateDash(player, "Gale Dash has expired.");
+                    this.cancel();
+                    return;
+                }
+
                 // Drain health each interval
                 if (tickCount % HEART_COST_INTERVAL == 0) {
                     double hp = player.getHealth();
@@ -123,7 +138,9 @@ public class FlowTrim implements Listener {
             dashTasks.remove(id);
         }
         isDashing.put(id, false);
-        player.setAllowFlight(false);
+        if (player.getGameMode() != GameMode.CREATIVE) {
+            player.setAllowFlight(false);
+        }
         cooldownManager.setCooldown(player, TrimPattern.FLOW, DASH_COOLDOWN);
         player.sendMessage("§8[§bFlow§8] §7" + message + " Cooldown applied.");
         player.getPersistentDataContainer().set(dashEndFallImmunityKey, PersistentDataType.BYTE, (byte) 1); // Set the flag
@@ -142,10 +159,14 @@ public class FlowTrim implements Listener {
     }
 
     @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        Player player = event.getPlayer();
-        if (player.isSneaking() && event.getNewSlot() == activationSlot) {
-            FlowPrimary(player);
+    public void onOffhandPress(PlayerSwapHandItemsEvent event) {
+        // Check if the player is sneaking when they press the offhand key
+        if (event.getPlayer().isSneaking()) {
+            // This is important: it prevents the player's hands from actually swapping items
+            event.setCancelled(true);
+
+            // Activate the ability
+            FlowPrimary(event.getPlayer());
         }
     }
 

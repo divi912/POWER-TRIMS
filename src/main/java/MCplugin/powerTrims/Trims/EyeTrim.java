@@ -21,6 +21,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.ConfigManager;
 import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
@@ -31,6 +32,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -47,29 +49,41 @@ public class EyeTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
+    private final ConfigManager configManager;
 
     // --- CONSTANTS ---
-    private static final double TRUE_SIGHT_RADIUS = 80.0;
-    private static final int TRUE_SIGHT_DURATION_TICKS = 600; // 30 seconds
-    private static final long TRUE_SIGHT_COOLDOWN = 120_000L; // 2 minutes
-    private static final long TASK_INTERVAL_TICKS = 20L; // Run task once per second
-    private static final double TRUE_SIGHT_VERTICAL_RADIUS = 50.0;
-    private final int activationSlot;
+    private final double TRUE_SIGHT_RADIUS;
+    private final int TRUE_SIGHT_DURATION_TICKS;
+    private final long TRUE_SIGHT_COOLDOWN;
+    private final long TASK_INTERVAL_TICKS;
+    private final double TRUE_SIGHT_VERTICAL_RADIUS;
 
     // --- STATE MANAGEMENT ---
     private final Map<UUID, BukkitRunnable> activeTrueSightTasks = new HashMap<>();
 
-    public EyeTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
+    public EyeTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
-        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
+        this.configManager = configManager;
+
+        TRUE_SIGHT_RADIUS = configManager.getDouble("eye.primary.true_sight_radius", 80.0);
+        TRUE_SIGHT_DURATION_TICKS = configManager.getInt("eye.primary.true_sight_duration_ticks", 600);
+        TRUE_SIGHT_COOLDOWN = configManager.getLong("trim.eye.primary.cooldown", 120_000L);
+        TASK_INTERVAL_TICKS = configManager.getLong("eye.primary.task_interval_ticks", 20L);
+        TRUE_SIGHT_VERTICAL_RADIUS = configManager.getDouble("eye.primary.true_sight_vertical_radius", 50.0);
+
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
     @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
+    public void onOffhandPress(PlayerSwapHandItemsEvent event) {
+        // Check if the player is sneaking when they press the offhand key
+        if (event.getPlayer().isSneaking()) {
+            // This is important: it prevents the player's hands from actually swapping items
+            event.setCancelled(true);
+
+            // Activate the ability
             activateEyePrimary(event.getPlayer());
         }
     }

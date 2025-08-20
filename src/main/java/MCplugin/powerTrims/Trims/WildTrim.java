@@ -22,7 +22,8 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; 
+import MCplugin.powerTrims.Logic.ConfigManager;
+import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
@@ -33,6 +34,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -49,20 +51,38 @@ public class WildTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
-    private final int activationSlot;
+    private final ConfigManager configManager;
 
     // --- CONSTANTS ---
-    private final int TRIGGER_HEALTH = 8; // 4 hearts (4 HP)
-    private final int COOLDOWN_TIME = 20; // Cooldown in seconds
-    private final Map<UUID, Long> cooldowns = new HashMap<>();
+    private final int PASSIVE_TRIGGER_HEALTH;
+    private final int PASSIVE_COOLDOWN_SECONDS;
+    private final long PRIMARY_COOLDOWN;
+    private final double GRAPPLE_RANGE;
+    private final int POISON_DURATION_TICKS;
+    private final double GRAPPLE_SPEED;
+    private final double ROOT_TRAP_RADIUS_XZ;
+    private final double ROOT_TRAP_RADIUS_Y;
+    private final int ROOT_TRAP_DURATION_TICKS;
+
+    private final Map<UUID, Long> passiveCooldowns = new HashMap<>();
     private final Set<UUID> frozenEntities = new HashSet<>();
 
 
-    public WildTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
+    public WildTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
-        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
+        this.configManager = configManager;
+
+        PASSIVE_TRIGGER_HEALTH = configManager.getInt("wild.passive.trigger_health", 8);
+        PASSIVE_COOLDOWN_SECONDS = configManager.getInt("wild.passive.cooldown_seconds", 20);
+        PRIMARY_COOLDOWN = configManager.getLong("wild.primary.cooldown", 20000);
+        GRAPPLE_RANGE = configManager.getDouble("wild.primary.grapple_range", 60.0);
+        POISON_DURATION_TICKS = configManager.getInt("wild.primary.poison_duration_ticks", 200);
+        GRAPPLE_SPEED = configManager.getDouble("wild.primary.grapple_speed", 1.8);
+        ROOT_TRAP_RADIUS_XZ = configManager.getDouble("wild.passive.root_trap_radius_xz", 5);
+        ROOT_TRAP_RADIUS_Y = configManager.getDouble("wild.passive.root_trap_radius_y", 3);
+        ROOT_TRAP_DURATION_TICKS = configManager.getInt("wild.passive.root_trap_duration_ticks", 200);
     }
 
 
@@ -77,7 +97,7 @@ public class WildTrim implements Listener {
 
         Location start = player.getEyeLocation();
         Vector direction = player.getLocation().getDirection().normalize();
-        double range = 60.0;
+        double range = GRAPPLE_RANGE;
         Player wildUser = player; // Store the player using the ability
 
         // Play sound effect for grappling hook
@@ -104,8 +124,8 @@ public class WildTrim implements Listener {
                 player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] Grappling to entity!");
                 visualizeGrapple(player, targetEntity.getLocation().add(0, 1, 0));
                 smoothlyPullPlayer(player, targetEntity.getLocation().add(0, 1, 0));
-                targetEntity.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 200, 1, true, false, true));
-                targetEntity.sendMessage(ChatColor.GREEN + "[§cWild§8] You have been Poisoned for 10 sec!");
+                targetEntity.addPotionEffect(new PotionEffect(PotionEffectType.POISON, POISON_DURATION_TICKS, 1, true, false, true));
+                targetEntity.sendMessage(ChatColor.GREEN + "[§cWild§8] You have been Poisoned for " + (POISON_DURATION_TICKS/20) + " sec!");
                 abilityUsed = true;
             }
         } else {
@@ -124,7 +144,7 @@ public class WildTrim implements Listener {
 
         // Apply cooldown only if the ability was successfully used
         if (abilityUsed) {
-            cooldownManager.setCooldown(player, TrimPattern.WILD, 20000);
+            cooldownManager.setCooldown(player, TrimPattern.WILD, PRIMARY_COOLDOWN);
         }
     }
 
@@ -148,7 +168,7 @@ public class WildTrim implements Listener {
 
         new BukkitRunnable() {
             int ticks = 0;
-            final double maxSpeed = 1.8; // Slightly faster
+            final double maxSpeed = GRAPPLE_SPEED;
             boolean reachedTarget = false;
 
             @Override
@@ -198,8 +218,13 @@ public class WildTrim implements Listener {
 
 
     @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
+    public void onOffhandPress(PlayerSwapHandItemsEvent event) {
+        // Check if the player is sneaking when they press the offhand key
+        if (event.getPlayer().isSneaking()) {
+            // This is important: it prevents the player's hands from actually swapping items
+            event.setCancelled(true);
+
+            // Activate the ability
             WildPrimary(event.getPlayer());
         }
     }
@@ -217,28 +242,28 @@ public class WildTrim implements Listener {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WILD)) return;
 
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (player.getHealth() > TRIGGER_HEALTH) return;
-            if (isOnCooldown(player)) {
+            if (player.getHealth() > PASSIVE_TRIGGER_HEALTH) return;
+            if (isPassiveOnCooldown(player)) {
                 player.sendMessage(ChatColor.RED + "§8[§cWild§8] Root Trap is on cooldown!");
                 return;
             }
 
             activateRootTrap(player);
-            setCooldown(player);
+            setPassiveCooldown(player);
         }, 1L); // Small delay to avoid fake damage event issues
     }
 
     public void activateRootTrap(Player player) {
-        if (isOnCooldown(player)) {
+        if (isPassiveOnCooldown(player)) {
             player.sendMessage(ChatColor.RED + "§8[§cWild§8] Root Trap is on cooldown!");
             return;
         }
 
-        setCooldown(player); // 20 seconds cooldown
+        setPassiveCooldown(player);
         player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] You activated Root Trap!");
 
         List<LivingEntity> affectedEntities = new ArrayList<>();
-        for (Entity entity : player.getNearbyEntities(5, 3, 5)) {
+        for (Entity entity : player.getNearbyEntities(ROOT_TRAP_RADIUS_XZ, ROOT_TRAP_RADIUS_Y, ROOT_TRAP_RADIUS_XZ)) {
             if (entity instanceof LivingEntity && entity != player) {
                 LivingEntity target = (LivingEntity) entity;
                 if (target instanceof Player targetPlayer && trustManager.isTrusted(player.getUniqueId(), targetPlayer.getUniqueId())) {
@@ -271,7 +296,7 @@ public class WildTrim implements Listener {
                 }
                 removeVines(affectedEntities);
             }
-        }.runTaskLater(plugin, 200);
+        }.runTaskLater(plugin, ROOT_TRAP_DURATION_TICKS);
     }
 
 
@@ -310,13 +335,13 @@ public class WildTrim implements Listener {
 
 
     // Checks if the ability is on cooldown
-    private boolean isOnCooldown(Player player) {
-        return cooldowns.containsKey(player.getUniqueId()) && (System.currentTimeMillis() < cooldowns.get(player.getUniqueId()));
+    private boolean isPassiveOnCooldown(Player player) {
+        return passiveCooldowns.containsKey(player.getUniqueId()) && (System.currentTimeMillis() < passiveCooldowns.get(player.getUniqueId()));
     }
 
     // Sets the cooldown
-    private void setCooldown(Player player) {
-        cooldowns.put(player.getUniqueId(), System.currentTimeMillis() + (COOLDOWN_TIME * 1000L));
+    private void setPassiveCooldown(Player player) {
+        passiveCooldowns.put(player.getUniqueId(), System.currentTimeMillis() + (PASSIVE_COOLDOWN_SECONDS * 1000L));
     }
 
 

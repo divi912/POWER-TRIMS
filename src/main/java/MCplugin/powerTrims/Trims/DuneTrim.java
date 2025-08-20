@@ -22,7 +22,8 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; 
+import MCplugin.powerTrims.Logic.ConfigManager;
+import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
@@ -32,6 +33,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -43,18 +45,22 @@ public class DuneTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
+    private final ConfigManager configManager;
     private final NamespacedKey effectKey;
-    private final int activationSlot;
-    private static final int SANDSTORM_RADIUS = 12;
-    private static final int SANDSTORM_DAMAGE = 10;
-    private static final long SANDSTORM_COOLDOWN = 60000; // 1 minutes
+    private final int SANDSTORM_RADIUS;
+    private final int SANDSTORM_DAMAGE;
+    private final long SANDSTORM_COOLDOWN;
 
-    public DuneTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
+    public DuneTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
+        this.configManager = configManager;
         this.effectKey = new NamespacedKey(plugin, "dune_trim_effect");
-        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
+
+        SANDSTORM_RADIUS = configManager.getInt("dune.primary.sandstorm_radius", 12);
+        SANDSTORM_DAMAGE = configManager.getInt("dune.primary.sandstorm_damage", 10);
+        SANDSTORM_COOLDOWN = configManager.getLong("dune.primary.cooldown", 60000);
     }
 
 
@@ -143,10 +149,14 @@ public class DuneTrim implements Listener {
     }
 
     @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        Player player = event.getPlayer();
-        if (player.isSneaking() && event.getNewSlot() == activationSlot) {
-            DunePrimary(player);
+    public void onOffhandPress(PlayerSwapHandItemsEvent event) {
+        // Check if the player is sneaking when they press the offhand key
+        if (event.getPlayer().isSneaking()) {
+            // This is important: it prevents the player's hands from actually swapping items
+            event.setCancelled(true);
+
+            // Activate the ability
+            DunePrimary(event.getPlayer());
         }
     }
 }

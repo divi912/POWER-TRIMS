@@ -22,6 +22,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.ConfigManager;
 import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
@@ -33,6 +34,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -47,29 +49,39 @@ public class RaiserTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
+    private final ConfigManager configManager;
 
     // --- CONSTANTS ---
-    private static final long SURGE_COOLDOWN = 120000; // 2 minutes
-    private static final double ENTITY_PULL_RADIUS = 15.0;
-    private static final double PLAYER_UPWARD_BOOST = 1.5;
-    private final int activationSlot;
-    private static final int PEARL_COOLDOWN_TICKS = 200; // 10 seconds
+    private final long SURGE_COOLDOWN;
+    private final double ENTITY_PULL_RADIUS;
+    private final double PLAYER_UPWARD_BOOST;
+    private final int PEARL_COOLDOWN_TICKS;
 
     // --- STATE MANAGEMENT ---
     // This set will track players who are currently in the air from this ability
     private final Set<UUID> awaitingLanding = new HashSet<>();
 
-    public RaiserTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
+    public RaiserTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
+        this.configManager = configManager;
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
-        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
+
+        SURGE_COOLDOWN = configManager.getLong("raiser.primary.cooldown", 120000);
+        ENTITY_PULL_RADIUS = configManager.getDouble("raiser.primary.entity_pull_radius", 15.0);
+        PLAYER_UPWARD_BOOST = configManager.getDouble("raiser.primary.player_upward_boost", 1.5);
+        PEARL_COOLDOWN_TICKS = configManager.getInt("raiser.primary.pearl_cooldown_ticks", 200);
     }
 
     @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
+    public void onOffhandPress(PlayerSwapHandItemsEvent event) {
+        // Check if the player is sneaking when they press the offhand key
+        if (event.getPlayer().isSneaking()) {
+            // This is important: it prevents the player's hands from actually swapping items
+            event.setCancelled(true);
+
+            // Activate the ability
             activateRaiserPrimary(event.getPlayer());
         }
     }

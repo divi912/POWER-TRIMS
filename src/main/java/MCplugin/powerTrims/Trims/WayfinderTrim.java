@@ -22,6 +22,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.ConfigManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
@@ -29,6 +30,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -40,21 +42,29 @@ import java.util.UUID;
 public class WayfinderTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
+    private final ConfigManager configManager;
     private final NamespacedKey effectKey;
-    private static final long TELEPORT_COOLDOWN = 120000; // 2 minutes cooldown
+    private final long TELEPORT_COOLDOWN;
     private final Map<UUID, Location> markedLocations = new HashMap<>();
-    private final int activationSlot;
+    private final boolean wayfinderEnabled;
 
-    public WayfinderTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager) {
+    public WayfinderTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, ConfigManager configManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
+        this.configManager = configManager;
         this.effectKey = new NamespacedKey(plugin, "wayfinder_trim_effect");
-        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
+        this.TELEPORT_COOLDOWN = configManager.getLong("wayfinder.primary.cooldown", 120000);
+        this.wayfinderEnabled = configManager.getBoolean("wayfinder.primary.enabled", true);
     }
 
 
 
     public void WayfinderPrimary(Player player) {
+
+        if (!wayfinderEnabled) {
+            return;
+        }
+
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
             player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
             return;
@@ -91,8 +101,13 @@ public class WayfinderTrim implements Listener {
     }
 
     @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
+    public void onOffhandPress(PlayerSwapHandItemsEvent event) {
+        // Check if the player is sneaking when they press the offhand key
+        if (event.getPlayer().isSneaking()) {
+            // This is important: it prevents the player's hands from actually swapping items
+            event.setCancelled(true);
+
+            // Activate the ability
             WayfinderPrimary(event.getPlayer());
         }
     }

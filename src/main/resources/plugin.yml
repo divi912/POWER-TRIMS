@@ -19,3 +19,11 @@ commands:
     description: Resets all of your trim cooldowns.
     usage: /<command>
     permission: powertrims.resetcooldowns
+  powertrims:
+    description: PowerTrims commands.
+    usage: /<command> [reload]
+    aliases: [pt]
+permissions:
+  powertrims.reload:
+    description: Allows reloading the PowerTrims config.
+    default: op

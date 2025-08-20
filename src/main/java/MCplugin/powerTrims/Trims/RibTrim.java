@@ -21,6 +21,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.ConfigManager;
 import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
@@ -36,6 +37,7 @@ import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.persistence.PersistentDataType;
@@ -48,11 +50,11 @@ public class RibTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
-    private final int activationSlot;
+    private final ConfigManager configManager;
 
     // --- CONSTANTS ---
-    private static final long RIB_COOLDOWN = 60_000L; // 1 minute
-    private static final long MINION_LIFESPAN_TICKS = 1200L; // 60 seconds
+    private final long RIB_COOLDOWN;
+    private final long MINION_LIFESPAN_TICKS;
     private static final NamespacedKey OWNER_KEY;
 
     // Static initializer for the NamespacedKey
@@ -65,20 +67,19 @@ public class RibTrim implements Listener {
     private final Map<UUID, LivingEntity> playerTargetMap = new HashMap<>();
     private final Map<UUID, List<Mob>> playerMinionMap = new HashMap<>();
 
-    public RibTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
+    public RibTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
-        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
+        this.configManager = configManager;
+
+        RIB_COOLDOWN = configManager.getLong("rib.primary.cooldown", 60_000L);
+        MINION_LIFESPAN_TICKS = configManager.getLong("rib.primary.minion_lifespan_ticks", 1200L);
+
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
-    @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
-            activateRibPrimary(event.getPlayer());
-        }
-    }
+
 
     public void activateRibPrimary(Player player) {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.RIB) || cooldownManager.isOnCooldown(player, TrimPattern.RIB)) {
@@ -117,6 +118,9 @@ public class RibTrim implements Listener {
 
             // Apply equipment and buffs
             ItemStack bow = new ItemStack(Material.BOW);
+            ItemStack helmet = new ItemStack(Material.LEATHER_HELMET);
+            bogged.getEquipment().setHelmet(helmet);
+            bogged.getEquipment().setHelmetDropChance(0.0f);
             bow.addUnsafeEnchantment(Enchantment.POWER, 5);
             Objects.requireNonNull(bogged.getEquipment()).setItemInMainHand(bow);
             bogged.getEquipment().setItemInMainHandDropChance(0.0f);
@@ -176,6 +180,19 @@ public class RibTrim implements Listener {
             }
         }
     }
+
+    @EventHandler
+    public void onOffhandPress(PlayerSwapHandItemsEvent event) {
+        // Check if the player is sneaking when they press the offhand key
+        if (event.getPlayer().isSneaking()) {
+            // This is important: it prevents the player's hands from actually swapping items
+            event.setCancelled(true);
+
+            // Activate the ability
+            activateRibPrimary(event.getPlayer());
+        }
+    }
+
 
     /**
      * BEHAVIOR IMPROVEMENT: Defensive AI

@@ -17,18 +17,11 @@
  * Copyright (C) [2025] [ div ].
  */
 
-
-
-
-
-
-
-
-
 package MCplugin.powerTrims;
 
 import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.Trims.*;
+import MCplugin.powerTrims.commands.PowerTrimsCommand;
 import MCplugin.powerTrims.commands.ResetCooldownsCommand;
 import MCplugin.powerTrims.integrations.PlaceholderIntegration;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
@@ -48,6 +41,7 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
     private TrimCooldownManager cooldownManager;
     private DataManager dataManager;
     private PersistentTrustManager trustManager;
+    private ConfigManager configManager;
 
 
     @Override
@@ -67,6 +61,7 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         saveDefaultConfig();
 
         // Initialize managers
+        configManager = new ConfigManager(this);
         trustManager = new PersistentTrustManager(this);
         dataManager = new DataManager(this);
         cooldownManager = new TrimCooldownManager(this);
@@ -92,6 +87,7 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         getCommand("trust").setExecutor(this);
         getCommand("untrust").setExecutor(this);
         getCommand("resettrimcooldowns").setExecutor(new ResetCooldownsCommand(this));
+        getCommand("powertrims").setExecutor(new PowerTrimsCommand(configManager));
 
         // Stylish startup message
         getLogger().info(ChatColor.GREEN + "--------------------------------------");
@@ -104,22 +100,22 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
 
     private void registerTrimAbilities() {
-        getServer().getPluginManager().registerEvents(new SilenceTrim(this, cooldownManager, trustManager), this);
-        getServer().getPluginManager().registerEvents(new WildTrim(this, cooldownManager, trustManager), this);
-        getServer().getPluginManager().registerEvents(new VexTrim(this, cooldownManager, trustManager), this);
-        getServer().getPluginManager().registerEvents(new TideTrim(this, cooldownManager, trustManager), this);
-        getServer().getPluginManager().registerEvents(new EyeTrim(this, cooldownManager, trustManager), this);
-        getServer().getPluginManager().registerEvents(new RibTrim(this, cooldownManager, trustManager), this);
-        getServer().getPluginManager().registerEvents(new FlowTrim(this, cooldownManager), this);
-        getServer().getPluginManager().registerEvents(new CoastTrim(this, cooldownManager, trustManager), this);
-        getServer().getPluginManager().registerEvents(new DuneTrim(this, cooldownManager, trustManager), this);
-        getServer().getPluginManager().registerEvents(new SentryTrim(this, cooldownManager, trustManager), this);
-        getServer().getPluginManager().registerEvents(new WayfinderTrim(this, cooldownManager), this);
-        getServer().getPluginManager().registerEvents(new RaiserTrim(this, cooldownManager, trustManager), this);
-        getServer().getPluginManager().registerEvents(new WardTrim(this, cooldownManager, trustManager), this);
-        getServer().getPluginManager().registerEvents(new SpireTrim(this, cooldownManager, trustManager), this);
-        getServer().getPluginManager().registerEvents(new HostTrim(this, cooldownManager, trustManager), this);
-        getServer().getPluginManager().registerEvents(new SnoutTrim(this,cooldownManager, trustManager), this);
+        getServer().getPluginManager().registerEvents(new SilenceTrim(this, cooldownManager, trustManager, configManager), this);
+        getServer().getPluginManager().registerEvents(new WildTrim(this, cooldownManager, trustManager, configManager), this);
+        getServer().getPluginManager().registerEvents(new VexTrim(this, cooldownManager, trustManager, configManager), this);
+        getServer().getPluginManager().registerEvents(new TideTrim(this, cooldownManager, trustManager, configManager), this);
+        getServer().getPluginManager().registerEvents(new EyeTrim(this, cooldownManager, trustManager, configManager), this);
+        getServer().getPluginManager().registerEvents(new RibTrim(this, cooldownManager, trustManager, configManager), this);
+        getServer().getPluginManager().registerEvents(new FlowTrim(this, cooldownManager, configManager), this);
+        getServer().getPluginManager().registerEvents(new CoastTrim(this, cooldownManager, trustManager, configManager), this);
+        getServer().getPluginManager().registerEvents(new DuneTrim(this, cooldownManager, trustManager, configManager), this);
+        getServer().getPluginManager().registerEvents(new SentryTrim(this, cooldownManager, trustManager, configManager), this);
+        getServer().getPluginManager().registerEvents(new WayfinderTrim(this, cooldownManager, configManager), this);
+        getServer().getPluginManager().registerEvents(new RaiserTrim(this, cooldownManager, trustManager, configManager), this);
+        getServer().getPluginManager().registerEvents(new WardTrim(this, cooldownManager, trustManager, configManager), this);
+        getServer().getPluginManager().registerEvents(new SpireTrim(this, cooldownManager, trustManager, configManager), this);
+        getServer().getPluginManager().registerEvents(new HostTrim(this, cooldownManager, trustManager, configManager), this);
+        getServer().getPluginManager().registerEvents(new SnoutTrim(this,cooldownManager, trustManager, configManager), this);
     }
 
     //trust command

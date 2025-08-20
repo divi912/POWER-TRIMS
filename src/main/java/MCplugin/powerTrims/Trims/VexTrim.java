@@ -22,7 +22,8 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; 
+import MCplugin.powerTrims.Logic.ConfigManager;
+import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
@@ -33,6 +34,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
@@ -46,33 +48,51 @@ public class VexTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
-    private final Map<UUID, Long> cooldowns = new HashMap<>();
-    private static final long COOLDOWN_TIME = 120000; // 20 seconds cooldown
-    private static final long HIDE_DURATION = 10000; // 10 seconds hide duration
-    private static VexTrim instance;
-    private final int activationSlot;
+    private final ConfigManager configManager;
+    private final Map<UUID, Long> passiveCooldowns = new HashMap<>();
 
+    // --- PRIMARY ABILITY CONSTANTS ---
+    private final long PRIMARY_COOLDOWN;
+    private final double PRIMARY_RADIUS;
+    private final double PRIMARY_DAMAGE;
+    private final int PRIMARY_DEBUFF_DURATION;
+    private final int PRIMARY_BLINDNESS_DURATION;
 
+    // --- PASSIVE ABILITY CONSTANTS ---
+    private final long PASSIVE_COOLDOWN;
+    private final long PASSIVE_HIDE_DURATION_TICKS;
+    private final double PASSIVE_HEALTH_THRESHOLD;
 
-    private BukkitRunnable passiveTask;
-
-    public VexTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
+    public VexTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
-        instance = this;
+        this.configManager = configManager;
         Bukkit.getPluginManager().registerEvents(this, plugin);
-        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
-    }
 
-    public static VexTrim getInstance() {
-        return instance;
+
+        // Load Primary Ability values
+        PRIMARY_COOLDOWN = configManager.getLong("vex.primary.cooldown", 120000L);
+        PRIMARY_RADIUS = configManager.getDouble("vex.primary.radius", 30.0);
+        PRIMARY_DAMAGE = configManager.getDouble("vex.primary.damage", 8.0);
+        PRIMARY_DEBUFF_DURATION = configManager.getInt("vex.primary.debuff_duration_ticks", 400);
+        PRIMARY_BLINDNESS_DURATION = configManager.getInt("vex.primary.blindness_duration_ticks", 100);
+
+        // Load Passive Ability values
+        PASSIVE_COOLDOWN = configManager.getLong("vex.passive.cooldown", 120000L);
+        PASSIVE_HIDE_DURATION_TICKS = configManager.getLong("vex.passive.hide_duration_ticks", 200L);
+        PASSIVE_HEALTH_THRESHOLD = configManager.getDouble("vex.passive.health_threshold", 8.0);
     }
 
 
     @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
+    public void onOffhandPress(PlayerSwapHandItemsEvent event) {
+        // Check if the player is sneaking when they press the offhand key
+        if (event.getPlayer().isSneaking()) {
+            // This is important: it prevents the player's hands from actually swapping items
+            event.setCancelled(true);
+
+            // Activate the ability
             VexPrimary(event.getPlayer());
         }
     }
@@ -86,7 +106,7 @@ public class VexTrim implements Listener {
         if (cooldownManager.isOnCooldown(player, TrimPattern.VEX)) return;
 
         // Ability parameters
-        final double radius = 30.0;
+        final double radius = PRIMARY_RADIUS;
         final int steps = 30;
         final long interval = 2L;
         final int points = 72;
@@ -124,18 +144,18 @@ public class VexTrim implements Listener {
                         if (target instanceof Player targetPlayer && trustManager.isTrusted(vexUser.getUniqueId(), targetPlayer.getUniqueId())) {
                             continue; // Skip trusted players
                         }
-                        target.damage(8.0, vexUser);
-                        target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 400, 1));
-                        target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 400, 1));
-                        target.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 400, 0));
-                        target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 100, 0));
+                        target.damage(PRIMARY_DAMAGE, vexUser);
+                        target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, PRIMARY_DEBUFF_DURATION, 1));
+                        target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, PRIMARY_DEBUFF_DURATION, 1));
+                        target.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, PRIMARY_DEBUFF_DURATION, 0));
+                        target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, PRIMARY_BLINDNESS_DURATION, 0));
                     }
                 }
             }
         }.runTaskTimer(plugin, 0L, interval);
 
-        cooldownManager.setCooldown(player, TrimPattern.VEX, COOLDOWN_TIME);
-        player.sendMessage("§8[§cVex§8] §7Vex's Vengeance unleashed in a 30-block radius!");
+        cooldownManager.setCooldown(player, TrimPattern.VEX, PRIMARY_COOLDOWN);
+        player.sendMessage("§8[§cVex§8] §7Vex's Vengeance unleashed in a " + (int)radius + "-block radius!");
     }
 
     @EventHandler
@@ -146,19 +166,19 @@ public class VexTrim implements Listener {
             // Check if health after damage is BELOW 4 hearts (8 HP)
             double newHealth = player.getHealth() - event.getFinalDamage();
             if (newHealth <= 0) return; // Prevent triggering on death
-            if (newHealth >= 8) return; // Ensure ability activates below 4 hearts
+            if (newHealth >= PASSIVE_HEALTH_THRESHOLD) return; // Ensure ability activates below 4 hearts
 
             // Check if ability is on cooldown
-            if (isOnCooldown(player)) return;
+            if (isPassiveOnCooldown(player)) return;
 
             // Activate ability
-            activateAbility(player);
+            activatePassiveAbility(player);
         }
     }
 
-    private void activateAbility(Player player) {
+    private void activatePassiveAbility(Player player) {
         // Set the cooldown FIRST
-        cooldowns.put(player.getUniqueId(), System.currentTimeMillis() + COOLDOWN_TIME);
+        passiveCooldowns.put(player.getUniqueId(), System.currentTimeMillis() + PASSIVE_COOLDOWN);
 
         // Hide the player from others
         for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
@@ -167,7 +187,7 @@ public class VexTrim implements Listener {
             }
         }
 
-        player.sendMessage(ChatColor.DARK_GRAY + "You have become invisible for 10 seconds!");
+        player.sendMessage(ChatColor.DARK_GRAY + "You have become invisible for " + (PASSIVE_HIDE_DURATION_TICKS / 20) + " seconds!");
 
         // Reveal the player after 10 seconds
         new BukkitRunnable() {
@@ -178,11 +198,11 @@ public class VexTrim implements Listener {
                 }
                 player.sendMessage(ChatColor.GREEN + "You are now visible again!");
             }
-        }.runTaskLater(plugin, HIDE_DURATION / 50); // Convert milliseconds to ticks
+        }.runTaskLater(plugin, PASSIVE_HIDE_DURATION_TICKS);
     }
 
-    private boolean isOnCooldown(Player player) {
-        return cooldowns.containsKey(player.getUniqueId()) &&
-                cooldowns.get(player.getUniqueId()) > System.currentTimeMillis();
+    private boolean isPassiveOnCooldown(Player player) {
+        return passiveCooldowns.containsKey(player.getUniqueId()) &&
+                passiveCooldowns.get(player.getUniqueId()) > System.currentTimeMillis();
     }
 }

@@ -21,7 +21,8 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.PersistentTrustManager; 
+import MCplugin.powerTrims.Logic.ConfigManager;
+import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import net.kyori.adventure.text.Component;
@@ -33,6 +34,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -50,13 +52,14 @@ public class WardTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
+    private final ConfigManager configManager;
     private final NamespacedKey effectKey;
     // --- CONSTANTS ---
-    private static final int BARRIER_DURATION = 200; // 10 seconds
-    private static final int ABSORPTION_LEVEL = 4; // Absorption V (increased from III)
-    private static final int RESISTANCE_BOOST_LEVEL = 2; // Resistance III (increased from II)
+    private final int BARRIER_DURATION;
+    private final int ABSORPTION_LEVEL;
+    private final int RESISTANCE_BOOST_LEVEL;
+    private final long WARD_COOLDOWN;
     private final Set<UUID> activeBarriers = new HashSet<>();
-    private final int activationSlot;
 
     private static final Component PREFIX = Component.text()
             .append(Component.text("[", NamedTextColor.DARK_GRAY))
@@ -65,12 +68,17 @@ public class WardTrim implements Listener {
             .build();
 
 
-    public WardTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
+    public WardTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
+        this.configManager = configManager;
         this.effectKey = new NamespacedKey(plugin, "ward_trim_effect");
-        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
+
+        BARRIER_DURATION = configManager.getInt("ward.primary.barrier_duration", 200);
+        ABSORPTION_LEVEL = configManager.getInt("ward.primary.absorption_level", 4);
+        RESISTANCE_BOOST_LEVEL = configManager.getInt("ward.primary.resistance_boost_level", 2);
+        WARD_COOLDOWN = configManager.getLong("ward.primary.cooldown", 120000);
     }
 
 
@@ -118,7 +126,7 @@ public class WardTrim implements Listener {
                 .append(PREFIX)
                 .append(Component.text(" You have activated your personal Protective Barrier!", NamedTextColor.GOLD))
                 .build());
-        cooldownManager.setCooldown(player, TrimPattern.WARD, 120000); // 2 minute cooldown
+        cooldownManager.setCooldown(player, TrimPattern.WARD, WARD_COOLDOWN);
 
         // Create continuous particle effect around the player
         new BukkitRunnable() {
@@ -179,8 +187,13 @@ public class WardTrim implements Listener {
     }
 
     @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
+    public void onOffhandPress(PlayerSwapHandItemsEvent event) {
+        // Check if the player is sneaking when they press the offhand key
+        if (event.getPlayer().isSneaking()) {
+            // This is important: it prevents the player's hands from actually swapping items
+            event.setCancelled(true);
+
+            // Activate the ability
             WardPrimary(event.getPlayer());
         }
     }

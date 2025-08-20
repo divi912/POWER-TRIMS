@@ -22,6 +22,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.ConfigManager;
 import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
@@ -32,6 +33,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -47,31 +49,46 @@ public class SilenceTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
-    private final int activationSlot;
+    private final ConfigManager configManager;
 
     // --- STATE & CONSTANTS ---
-    // Simplified cooldown maps. AtomicLong and ConcurrentHashMap are overkill here.
     private final Map<UUID, Long> wardensEchoCooldowns = new HashMap<>();
 
-    private static final long WARDENS_ECHO_COOLDOWN_MS = 120_000L; // 2 minutes
-    private static final double PRIMARY_RADIUS = 15.0;
-    private static final int POTION_DURATION_TICKS = 400; // 20 seconds
-    private static final int PEARL_COOLDOWN_TICKS = 200; // 10 seconds
-    private static final double ECHO_RADIUS = 6.0;
-    private static final int ECHO_EFFECT_DURATION_TICKS = 300;
-    private static final int MAX_AFFECTED_ENTITIES = 30;
+    private final long WARDENS_ECHO_COOLDOWN_MS;
+    private final double PRIMARY_RADIUS;
+    private final int POTION_DURATION_TICKS;
+    private final int PEARL_COOLDOWN_TICKS;
+    private final double ECHO_RADIUS;
+    private final int ECHO_EFFECT_DURATION_TICKS;
+    private final int MAX_AFFECTED_ENTITIES;
+    private final long PRIMARY_COOLDOWN;
 
-    public SilenceTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
+    public SilenceTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
-        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
+        this.configManager = configManager;
+
+        WARDENS_ECHO_COOLDOWN_MS = configManager.getLong("silence.passive.cooldown", 120_000L);
+        PRIMARY_RADIUS = configManager.getDouble("silence.primary.radius", 15.0);
+        POTION_DURATION_TICKS = configManager.getInt("silence.primary.potion_duration_ticks", 400);
+        PEARL_COOLDOWN_TICKS = configManager.getInt("silence.primary.pearl_cooldown_ticks", 200);
+        ECHO_RADIUS = configManager.getDouble("silence.passive.echo_radius", 6.0);
+        ECHO_EFFECT_DURATION_TICKS = configManager.getInt("silence.passive.effect_duration_ticks", 300);
+        MAX_AFFECTED_ENTITIES = configManager.getInt("silence.primary.max_affected_entities", 30);
+        PRIMARY_COOLDOWN = configManager.getLong("silence.primary.cooldown", 90000);
+
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
     @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
+    public void onOffhandPress(PlayerSwapHandItemsEvent event) {
+        // Check if the player is sneaking when they press the offhand key
+        if (event.getPlayer().isSneaking()) {
+            // This is important: it prevents the player's hands from actually swapping items
+            event.setCancelled(true);
+
+            // Activate the ability
             activateSilencePrimary(event.getPlayer());
         }
     }
@@ -115,7 +132,7 @@ public class SilenceTrim implements Listener {
         }
 
         player.sendMessage("§8[§cSilence§8] §7You have unleashed the Warden's Roar!");
-        cooldownManager.setCooldown(player, TrimPattern.SILENCE, 90000);
+        cooldownManager.setCooldown(player, TrimPattern.SILENCE, PRIMARY_COOLDOWN);
     }
 
     // --- Warden's Echo (Passive Ability) ---

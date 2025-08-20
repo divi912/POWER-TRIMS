@@ -1,6 +1,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.ConfigManager;
 import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
@@ -13,6 +14,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -27,27 +29,14 @@ public class CoastTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
+    private final ConfigManager configManager;
     private final int activationSlot;
 
-    // --- Ability Constants ---
-    // Behavior
-    private static final int WATER_BURST_RADIUS = 30;
-    private static final int WATER_BURST_DAMAGE = 10;
-    private static final long WATER_BURST_COOLDOWN = 60000; // 60 seconds
-    private static final int PULL_DURATION_TICKS = 60;    // 3 seconds
-
-    // Potion Effects
-    private static final int DEBUFF_DURATION_TICKS = 80;    // 4 seconds
-    private static final int BUFF_DURATION_TICKS = 100;     // 5 seconds
-    private static final int WEAKNESS_AMPLIFIER = 1;
-    private static final int SLOWNESS_AMPLIFIER = 1;
-    private static final int SPEED_AMPLIFIER = 1;
-    private static final int RESISTANCE_AMPLIFIER = 0;
-
-    public CoastTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
+    public CoastTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
+        this.configManager = configManager;
         this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
     }
 
@@ -66,38 +55,42 @@ public class CoastTrim implements Listener {
         // Play activation sounds and show particles
         playEffects(playerLoc, world);
 
-        // Collect all valid targets into a list
+        int waterBurstRadius = configManager.getInt("coast.primary.water-burst-radius", 30);
+        int waterBurstDamage = configManager.getInt("coast.primary.water-burst-damage", 10);
+        long waterBurstCooldown = configManager.getLong("coast.primary.water-burst-cooldown", 60000);
+        int pullDurationTicks = configManager.getInt("coast.primary.pull-duration-ticks", 60);
+        int debuffDurationTicks = configManager.getInt("coast.primary.debuff-duration-ticks", 80);
+        int buffDurationTicks = configManager.getInt("coast.primary.buff-duration-ticks", 100);
+        int weaknessAmplifier = configManager.getInt("coast.primary.weakness-amplifier", 1);
+        int slownessAmplifier = configManager.getInt("coast.primary.slowness-amplifier", 1);
+        int speedAmplifier = configManager.getInt("coast.primary.speed-amplifier", 1);
+        int resistanceAmplifier = configManager.getInt("coast.primary.resistance-amplifier", 0);
+
         List<LivingEntity> targets = new ArrayList<>();
-        for (Entity entity : world.getNearbyEntities(playerLoc, WATER_BURST_RADIUS, WATER_BURST_RADIUS, WATER_BURST_RADIUS)) {
+        for (Entity entity : world.getNearbyEntities(playerLoc, waterBurstRadius, waterBurstRadius, waterBurstRadius)) {
             if (entity instanceof LivingEntity target && !target.equals(player)) {
-                // Skip trusted players
                 if (target instanceof Player targetPlayer && trustManager.isTrusted(player.getUniqueId(), targetPlayer.getUniqueId())) {
                     continue;
                 }
 
-                // Apply instant damage and debuffs
-                target.damage(WATER_BURST_DAMAGE, player);
-                target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, DEBUFF_DURATION_TICKS, WEAKNESS_AMPLIFIER));
-                target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, DEBUFF_DURATION_TICKS, SLOWNESS_AMPLIFIER));
+                target.damage(waterBurstDamage, player);
+                target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, debuffDurationTicks, weaknessAmplifier));
+                target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, debuffDurationTicks, slownessAmplifier));
                 world.spawnParticle(Particle.SPLASH, target.getLocation().add(0, 1, 0), 30, 0.5, 0.5, 0.5, 0.1);
 
                 targets.add(target);
             }
         }
 
-        // Start ONE consolidated task to pull all collected targets
         if (!targets.isEmpty()) {
-            startPullTask(targets, player);
+            startPullTask(targets, player, pullDurationTicks);
         }
 
-        // Apply buffs to the player
-        player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, BUFF_DURATION_TICKS, SPEED_AMPLIFIER));
-        player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, BUFF_DURATION_TICKS, RESISTANCE_AMPLIFIER));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, buffDurationTicks, speedAmplifier));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, buffDurationTicks, resistanceAmplifier));
 
-        // Set ability cooldown
-        cooldownManager.setCooldown(player, TrimPattern.COAST, WATER_BURST_COOLDOWN);
+        cooldownManager.setCooldown(player, TrimPattern.COAST, waterBurstCooldown);
 
-        // Send activation message
         sendActivationMessage(player);
     }
 
@@ -105,7 +98,6 @@ public class CoastTrim implements Listener {
         world.playSound(location, Sound.ENTITY_DOLPHIN_PLAY, 1.0f, 1.5f);
         world.playSound(location, Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 0.5f);
 
-        // Water particle ring
         for (double angle = 0; angle < 360; angle += 10) {
             double rad = Math.toRadians(angle);
             double offsetX = Math.cos(rad) * 1.5;
@@ -114,23 +106,20 @@ public class CoastTrim implements Listener {
             world.spawnParticle(Particle.FALLING_WATER, effectLoc, 20, 0.1, 0.1, 0.1, 0.1);
         }
 
-        // Cloud effect
         world.spawnParticle(Particle.CLOUD, location.clone().add(0, 1, 0), 50, 1, 0.5, 1, 0.1);
     }
 
-    private void startPullTask(List<LivingEntity> targets, Player user) {
+    private void startPullTask(List<LivingEntity> targets, Player user, int pullDurationTicks) {
         new BukkitRunnable() {
             private int ticksLived = 0;
 
             @Override
             public void run() {
-                // Stop the task if the user is offline or the duration is over
-                if (ticksLived++ > PULL_DURATION_TICKS || !user.isOnline()) {
+                if (ticksLived++ > pullDurationTicks || !user.isOnline()) {
                     this.cancel();
                     return;
                 }
 
-                // Remove invalid targets to prevent errors and improve performance
                 targets.removeIf(t -> !t.isValid() || t.isDead());
 
                 if (targets.isEmpty()){
@@ -141,8 +130,7 @@ public class CoastTrim implements Listener {
                 Location userLocation = user.getLocation();
 
                 for (LivingEntity target : targets) {
-                    // Stop pulling an entity if it gets close (using distanceSquared is more performant)
-                    if (target.getLocation().distanceSquared(userLocation) < 4) { // 2*2 = 4
+                    if (target.getLocation().distanceSquared(userLocation) < 4) { 
                         continue;
                     }
 
@@ -150,7 +138,7 @@ public class CoastTrim implements Listener {
                     target.setVelocity(pullDirection);
                 }
             }
-        }.runTaskTimer(plugin, 0L, 1L); // Run every tick
+        }.runTaskTimer(plugin, 0L, 1L);
     }
 
     private void sendActivationMessage(Player player) {
@@ -163,12 +151,15 @@ public class CoastTrim implements Listener {
         player.sendMessage(message);
     }
 
-    // Listens for the player hotbar switch + sneak combo to activate Water Burst
     @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        Player player = event.getPlayer();
-        if (player.isSneaking() && event.getNewSlot() == activationSlot) {
-            CoastPrimary(player);
+    public void onOffhandPress(PlayerSwapHandItemsEvent event) {
+        // Check if the player is sneaking when they press the offhand key
+        if (event.getPlayer().isSneaking()) {
+            // This is important: it prevents the player's hands from actually swapping items
+            event.setCancelled(true);
+
+            // Activate the ability
+            CoastPrimary(event.getPlayer());
         }
     }
 }

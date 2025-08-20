@@ -21,6 +21,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.ConfigManager;
 import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
@@ -31,6 +32,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -44,28 +46,42 @@ public class TideTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
-    private final int activationSlot;
+    private final ConfigManager configManager;
 
     // --- CONSTANTS ---
-    private static final long TIDE_COOLDOWN = 120_000L; // 2 minutes
-    private static final double WAVE_WIDTH = 3.0;
-    private static final int EFFECT_DURATION_TICKS = 300;
-    private static final double KNOCKBACK_STRENGTH = 1.8;
-    private static final int WALL_HEIGHT = 6;
-    private static final int MOVE_DELAY_TICKS = 2;
-    private static final int MAX_MOVES = 20;
+    private final long TIDE_COOLDOWN;
+    private final double WAVE_WIDTH;
+    private final int EFFECT_DURATION_TICKS;
+    private final double KNOCKBACK_STRENGTH;
+    private final int WALL_HEIGHT;
+    private final int MOVE_DELAY_TICKS;
+    private final int MAX_MOVES;
 
-    public TideTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
+    public TideTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
-        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
+        this.configManager = configManager;
+
+        TIDE_COOLDOWN = configManager.getLong("tide.primary.cooldown", 120_000L);
+        WAVE_WIDTH = configManager.getDouble("tide.primary.wave_width", 3.0);
+        EFFECT_DURATION_TICKS = configManager.getInt("tide.primary.effect_duration_ticks", 300);
+        KNOCKBACK_STRENGTH = configManager.getDouble("tide.primary.knockback_strength", 1.8);
+        WALL_HEIGHT = configManager.getInt("tide.primary.wall_height", 6);
+        MOVE_DELAY_TICKS = configManager.getInt("tide.primary.move_delay_ticks", 2);
+        MAX_MOVES = configManager.getInt("tide.primary.max_moves", 20);
+
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
     @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
+    public void onOffhandPress(PlayerSwapHandItemsEvent event) {
+        // Check if the player is sneaking when they press the offhand key
+        if (event.getPlayer().isSneaking()) {
+            // This is important: it prevents the player's hands from actually swapping items
+            event.setCancelled(true);
+
+            // Activate the ability
             activateTidePrimary(event.getPlayer());
         }
     }

@@ -1,6 +1,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.ConfigManager;
 import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
@@ -12,6 +13,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -27,13 +29,13 @@ public class HostTrim implements Listener {
 
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
-    private final int activationSlot;
+    private final ConfigManager configManager;
 
     // --- CONSTANTS ---
-    private static final long ESSENCE_REAPER_COOLDOWN = 120_000L; // 2 minutes
-    private static final double EFFECT_STEAL_RADIUS = 10.0;
-    private static final double HEALTH_STEAL_AMOUNT = 4.0; // 2 hearts
-    private static final double PARTICLE_DENSITY = 4.0; // Particles per block
+    private final long ESSENCE_REAPER_COOLDOWN;
+    private final double EFFECT_STEAL_RADIUS;
+    private final double HEALTH_STEAL_AMOUNT;
+    private final double PARTICLE_DENSITY;
 
     // Using Sets for efficient 'contains' checks and better readability
     private static final Set<EntityType> BOSS_MOBS = EnumSet.of(
@@ -47,10 +49,16 @@ public class HostTrim implements Listener {
             PotionEffectType.FIRE_RESISTANCE, PotionEffectType.RESISTANCE, PotionEffectType.ABSORPTION
     );
 
-    public HostTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager) {
+    public HostTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
-        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
+        this.configManager = configManager;
+
+        ESSENCE_REAPER_COOLDOWN = configManager.getLong("host.primary.cooldown", 120_000L);
+        EFFECT_STEAL_RADIUS = configManager.getDouble("host.primary.effect_steal_radius", 10.0);
+        HEALTH_STEAL_AMOUNT = configManager.getDouble("host.primary.health_steal_amount", 4.0);
+        PARTICLE_DENSITY = configManager.getDouble("host.primary.particle_density", 4.0);
+
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
@@ -72,9 +80,13 @@ public class HostTrim implements Listener {
     }
 
     @EventHandler
-    public void onHotbarSwitch(PlayerItemHeldEvent event) {
-        // Use the constant and check both conditions
-        if (event.getNewSlot() == activationSlot && event.getPlayer().isSneaking()) {
+    public void onOffhandPress(PlayerSwapHandItemsEvent event) {
+        // Check if the player is sneaking when they press the offhand key
+        if (event.getPlayer().isSneaking()) {
+            // This is important: it prevents the player's hands from actually swapping items
+            event.setCancelled(true);
+
+            // Activate the ability
             activateHostPrimary(event.getPlayer());
         }
     }
