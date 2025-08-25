@@ -56,6 +56,10 @@ public class TrimCooldownManager {
         }.runTaskTimer(plugin, 0L, 20L);
     }
 
+    // --- ADDED: Public method to reload the config and apply changes ---
+    public void reload() {
+        loadConfig();
+    }
     private void loadConfig() {
         FileConfiguration config = plugin.getConfig();
         String mode = config.getString("cooldown-display", "ACTION_BAR").toUpperCase();
@@ -67,21 +71,25 @@ public class TrimCooldownManager {
         }
     }
 
+    // --- RESTRUCTURED: This method now correctly handles switching between display modes ---
     private void updateDisplays() {
         for (Player player : Bukkit.getOnlinePlayers()) {
+            // First, if the mode is NOT scoreboard, we ensure our scoreboard is gone.
+            if (displayMode != DisplayMode.SCOREBOARD) {
+                // Use the existing safe cleanup method.
+                removeScoreboard(player);
+            }
+
+            // Now, apply the correct display based on the current mode.
             if (displayMode == DisplayMode.SCOREBOARD) {
                 showScoreboard(player);
             } else if (displayMode == DisplayMode.ACTION_BAR) {
                 showActionBar(player);
-            } else {
-                // If display is NONE or something else, ensure our objective is removed.
-                Scoreboard board = player.getScoreboard();
-                if (board.getObjective("TrimCooldown") != null) {
-                    board.getObjective("TrimCooldown").unregister();
-                }
             }
+            // The 'NONE' case is now handled perfectly by the cleanup logic at the top.
         }
     }
+
 
     private void showActionBar(Player player) {
         TrimPattern trim = ArmourChecking.getEquippedTrim(player);
