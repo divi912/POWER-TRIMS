@@ -11,8 +11,8 @@ import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityPotionEffectEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
-import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -20,10 +20,8 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.util.Vector;
 
-import java.util.ArrayList;
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class HostTrim implements Listener {
 
@@ -31,13 +29,16 @@ public class HostTrim implements Listener {
     private final PersistentTrustManager trustManager;
     private final ConfigManager configManager;
 
+    private final Map<UUID, Set<PotionEffectType>> amplifiedEffectsTracker = new ConcurrentHashMap<>();
+
     // --- CONSTANTS ---
     private final long ESSENCE_REAPER_COOLDOWN;
     private final double EFFECT_STEAL_RADIUS;
     private final double HEALTH_STEAL_AMOUNT;
     private final double PARTICLE_DENSITY;
 
-    // Using Sets for efficient 'contains' checks and better readability
+    private static final int MAX_STEALABLE_DURATION = 36000; // 30 minutes in ticks
+
     private static final Set<EntityType> BOSS_MOBS = EnumSet.of(
             EntityType.WARDEN,
             EntityType.ENDER_DRAGON,
@@ -63,12 +64,31 @@ public class HostTrim implements Listener {
     }
 
     @EventHandler
+    public void onPotionEffectEnd(EntityPotionEffectEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return;
+        }
+
+        if (event.getAction() == EntityPotionEffectEvent.Action.REMOVED ||
+                event.getAction() == EntityPotionEffectEvent.Action.CLEARED) {
+
+            PotionEffectType type = event.getModifiedType();
+            Set<PotionEffectType> trackedEffects = amplifiedEffectsTracker.get(player.getUniqueId());
+
+            if (trackedEffects != null && trackedEffects.remove(type)) {
+                if (trackedEffects.isEmpty()) {
+                    amplifiedEffectsTracker.remove(player.getUniqueId());
+                }
+            }
+        }
+    }
+
+    @EventHandler
     public void onEntityTarget(EntityTargetLivingEntityEvent event) {
         if (!(event.getTarget() instanceof Player targetPlayer) || !(event.getEntity() instanceof Mob mob)) {
             return;
         }
 
-        // Ignore boss mobs
         if (BOSS_MOBS.contains(mob.getType())) {
             return;
         }
@@ -81,60 +101,55 @@ public class HostTrim implements Listener {
 
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
-        // Check if the player is sneaking when they press the offhand key
         if (event.getPlayer().isSneaking()) {
-            // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);
-
-            // Activate the ability
             activateHostPrimary(event.getPlayer());
         }
     }
 
     public void activateHostPrimary(Player player) {
-        // Combine guard clauses for cleaner code
         if (cooldownManager.isOnCooldown(player, TrimPattern.HOST) ||
                 !ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.HOST)) {
             return;
         }
 
-        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
+        if (Bukkit.getPluginManager().isPluginEnabled("WorldGuard") && !WorldGuardIntegration.canUseAbilities(player)) {
             player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
             return;
         }
 
         Location playerLoc = player.getLocation();
         World world = player.getWorld();
-
-        // Use a LOCAL set to track effects stolen in THIS activation to avoid memory leaks
         Set<PotionEffectType> stolenThisActivation = new HashSet<>();
 
-        // Use getNearbyPlayers for better performance
-        for (Player targetPlayer : world.getNearbyPlayers(playerLoc, EFFECT_STEAL_RADIUS, EFFECT_STEAL_RADIUS, EFFECT_STEAL_RADIUS)) {
+        for (Player targetPlayer : world.getNearbyPlayers(playerLoc, EFFECT_STEAL_RADIUS)) {
             if (targetPlayer.equals(player) || trustManager.isTrusted(player.getUniqueId(), targetPlayer.getUniqueId())) {
                 continue;
             }
 
-            // Steal Potion Effects
-            // Iterate over a copy to prevent ConcurrentModificationException
             for (PotionEffect effect : new ArrayList<>(targetPlayer.getActivePotionEffects())) {
                 PotionEffectType type = effect.getType();
 
-                // Check if it's a positive effect AND we haven't stolen this type yet in this activation
-                if (POSITIVE_EFFECTS.contains(type) && stolenThisActivation.add(type)) {
+                // --- MODIFIED: Added 'effect.getDuration() > 0' to filter out infinite (-1) effects ---
+                if (effect.getDuration() > 0 && effect.getDuration() < MAX_STEALABLE_DURATION &&
+                        POSITIVE_EFFECTS.contains(type) &&
+                        stolenThisActivation.add(type) &&
+                        !isEffectAmplifiedByHost(targetPlayer.getUniqueId(), type)) {
+
                     targetPlayer.removePotionEffect(type);
                     player.addPotionEffect(new PotionEffect(type, effect.getDuration(), effect.getAmplifier() + 1, true, true));
+
+                    amplifiedEffectsTracker.computeIfAbsent(player.getUniqueId(), k -> ConcurrentHashMap.newKeySet()).add(type);
                 }
             }
 
-            // Steal Health
             double targetHealth = targetPlayer.getHealth();
             double healthToSteal = Math.min(targetHealth, HEALTH_STEAL_AMOUNT);
 
             if (healthToSteal > 0) {
                 targetPlayer.setHealth(Math.max(0, targetHealth - healthToSteal));
                 player.setHealth(Math.min(player.getMaxHealth(), player.getHealth() + healthToSteal));
-                createParticleTrail(playerLoc, targetPlayer.getLocation(), world);
+                createParticleTrail(targetPlayer.getLocation(), playerLoc, world);
             }
         }
 
@@ -145,10 +160,14 @@ public class HostTrim implements Listener {
         player.sendMessage(ChatColor.DARK_PURPLE + "Essence Reaper activated!");
     }
 
+    private boolean isEffectAmplifiedByHost(UUID playerUUID, PotionEffectType type) {
+        Set<PotionEffectType> trackedEffects = amplifiedEffectsTracker.get(playerUUID);
+        return trackedEffects != null && trackedEffects.contains(type);
+    }
+
     private void createParticleTrail(Location start, Location end, World world) {
         Vector direction = end.toVector().subtract(start.toVector());
 
-        // Avoid division by zero if start and end are the same
         if (direction.lengthSquared() < 0.001) {
             return;
         }
@@ -157,7 +176,6 @@ public class HostTrim implements Listener {
         Vector step = direction.normalize().multiply(1.0 / PARTICLE_DENSITY);
         int steps = (int) (distance * PARTICLE_DENSITY);
 
-        // Use a mutable location to avoid creating new Vector objects in the loop
         Location currentPoint = start.clone();
         for (int i = 0; i < steps; i++) {
             currentPoint.add(step);
