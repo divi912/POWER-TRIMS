@@ -161,6 +161,9 @@ public class FlowTrim implements Listener {
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
         // Check if the player is sneaking when they press the offhand key
+        if (!configManager.isTrimEnabled("flow")) {
+            return;
+        }
         if (event.getPlayer().isSneaking()) {
             // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);

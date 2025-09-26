@@ -305,7 +305,7 @@ public final class LoreChanger implements Listener {
             lore.add("");
 
             lore.add(ChatColor.BLUE + "❖ " + ChatColor.GOLD + "Passive Ability: " + ChatColor.BOLD + "Protection" + ChatColor.BLUE + " ❖");
-            lore.add(ChatColor.GRAY + "✦ Grants " + ChatColor.YELLOW + "Resistance I" + ChatColor.DARK_GRAY + " while wearing Full Ward Trim Armor");
+            lore.add(ChatColor.GRAY + "✦ Grants " + ChatColor.YELLOW + "Resistance I" + ChatColor.DARK_GRAY + " while wearing Full Sentry Trim Armor");
             lore.add("");
         } else if (item.getType() == SPIRE_TRIM_TEMPLATE) {
             // Spire Trim Lore

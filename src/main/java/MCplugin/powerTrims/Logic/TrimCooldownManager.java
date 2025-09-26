@@ -131,7 +131,7 @@ public class TrimCooldownManager {
             obj.getScore(PlaceholderAPI.setPlaceholders(player, "§e⚡ §lStatus: §r%powertrims_status%")).setScore(7);
             obj.getScore("§r  ").setScore(5);
             obj.getScore("§7━━━━━━━━━━━━━━━━━━━━━━━━━━━━§0").setScore(4);
-            obj.getScore("§c         Created by §ldiv").setScore(3);
+            obj.getScore("§c         Created by §ldivi").setScore(3);
             obj.getScore("§8     ⚡ §6§l POWER TRIMS§8 ⚡").setScore(1);
         } else {
             // Fallback to manual string concatenation if PAPI is not available
@@ -158,7 +158,7 @@ public class TrimCooldownManager {
 
             obj.getScore(ChatColor.RESET + "  ").setScore(5);
             obj.getScore(ChatColor.GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + ChatColor.BLACK).setScore(4);
-            obj.getScore(ChatColor.DARK_RED+ "         Created by " + ChatColor.RED + "div").setScore(3);
+            obj.getScore(ChatColor.DARK_RED+ "         Created by " + ChatColor.RED + "divi").setScore(3);
             obj.getScore(ChatColor.DARK_GRAY + "     ⚡ " + ChatColor.GOLD + ChatColor.BOLD + " POWER TRIMS" + ChatColor.DARK_GRAY + " ⚡").setScore(2);
         }
     }

@@ -20,12 +20,12 @@ import static org.bukkit.potion.PotionEffect.INFINITE_DURATION;
 
 public class TrimEffectManager implements Listener {
     private final JavaPlugin plugin;
+    private final ConfigManager configManager;
     private final Map<TrimPattern, List<PotionEffect>> passiveEffects = new HashMap<>();
 
-
-
-    public TrimEffectManager(JavaPlugin plugin) {
+    public TrimEffectManager(JavaPlugin plugin, ConfigManager configManager) {
         this.plugin = plugin;
+        this.configManager = configManager;
         Bukkit.getPluginManager().registerEvents(this, plugin);
         registerPassiveEffects();
     }
@@ -68,25 +68,33 @@ public class TrimEffectManager implements Listener {
         passiveEffects.put(TrimPattern.RIB, List.of(
                 new PotionEffect(PotionEffectType.RESISTANCE,INFINITE_DURATION, 0, true, false, true)
         ));
+        passiveEffects.put(TrimPattern.BOLT, List.of(
+                        new PotionEffect(PotionEffectType.SPEED,INFINITE_DURATION, 2, true, false, true)
+                ));
         passiveEffects.put(TrimPattern.FLOW, List.of(
                 new PotionEffect(PotionEffectType.SPEED, INFINITE_DURATION, 1, true, false, true)
         ));
     }
 
-    private void applyTrimEffects(Player player) {
+    public void applyTrimEffects(Player player) {
         TrimPattern equipped = ArmourChecking.getEquippedTrim(player); // Get the one matching trim
 
-        // Remove all effects first
+        // Remove all passive effects first to handle unequipping or switching trims
         for (List<PotionEffect> effects : passiveEffects.values()) {
             for (PotionEffect effect : effects) {
                 player.removePotionEffect(effect.getType());
             }
         }
 
-        // Now apply only the matching one
+        // Now apply the effect for the equipped trim, if it's enabled
         if (equipped != null && passiveEffects.containsKey(equipped)) {
-            for (PotionEffect effect : passiveEffects.get(equipped)) {
-                player.addPotionEffect(effect);
+            String trimName = equipped.getKey().getKey(); // e.g., "sentry", "vex"
+
+            // Check if the trim is enabled in the config
+            if (configManager.isTrimEnabled(trimName)) {
+                for (PotionEffect effect : passiveEffects.get(equipped)) {
+                    player.addPotionEffect(effect);
+                }
             }
         }
     }

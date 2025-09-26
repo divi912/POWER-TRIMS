@@ -1,0 +1,164 @@
+package MCplugin.powerTrims.Trims;
+
+import MCplugin.powerTrims.Logic.ArmourChecking;
+import MCplugin.powerTrims.Logic.ConfigManager;
+import MCplugin.powerTrims.Logic.PersistentTrustManager;
+import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.integrations.WorldGuardIntegration;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.*;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
+import org.bukkit.inventory.meta.trim.TrimPattern;
+import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitRunnable;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+
+public class BoltTrim implements Listener {
+
+    private final JavaPlugin plugin;
+    private final TrimCooldownManager cooldownManager;
+    private final PersistentTrustManager trustManager;
+    private final ConfigManager configManager;
+
+    public BoltTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
+        this.plugin = plugin;
+        this.cooldownManager = cooldownManager;
+        this.trustManager = trustManager;
+        this.configManager = configManager;
+        plugin.getServer().getPluginManager().registerEvents(this, plugin);
+    }
+
+
+
+    @EventHandler
+    public void onOffhandPress(PlayerSwapHandItemsEvent event) {
+        if (event.getPlayer().isSneaking()) {
+            event.setCancelled(true);
+            activateBoltPrimary(event.getPlayer());
+        }
+    }
+
+    // Active: Chain Lightning
+    public void activateBoltPrimary(Player player) {
+        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.BOLT)) {
+            return;
+        }
+        if (cooldownManager.isOnCooldown(player, TrimPattern.BOLT)) {
+            return;
+        }
+        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
+            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            return;
+        }
+
+        // Config values
+        long cooldown = configManager.getLong("bolt.primary.cooldown", 20000L);
+        int chainRange = configManager.getInt("bolt.primary.chain_range", 10);
+        int maxChains = configManager.getInt("bolt.primary.max_chains", 3);
+        double initialDamage = configManager.getDouble("bolt.primary.initial_damage", 6.0);
+        double subsequentDamage = configManager.getDouble("bolt.primary.subsequent_damage", 4.0);
+        int targetRange = configManager.getInt("bolt.primary.target_range", 20);
+        int weaknessDuration = configManager.getInt("bolt.primary.weakness_duration", 100); // 5 seconds
+        int weaknessAmplifier = configManager.getInt("bolt.primary.weakness_amplifier", 0); // Weakness I
+
+
+        LivingEntity target = getTarget(player, targetRange);
+
+        if (target == null) {
+            player.sendMessage(ChatColor.GRAY + "No target in sight.");
+            return;
+        }
+
+        World world = player.getWorld();
+        world.strikeLightningEffect(target.getLocation());
+        target.damage(initialDamage, player);
+        target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, weaknessDuration, weaknessAmplifier));
+
+
+        List<LivingEntity> struckEntities = new ArrayList<>();
+        struckEntities.add(target);
+
+        LivingEntity currentTarget = target;
+        for (int i = 0; i < maxChains; i++) {
+            LivingEntity nextTarget = findNextTarget(currentTarget, chainRange, struckEntities, player);
+            if (nextTarget != null) {
+                world.strikeLightningEffect(nextTarget.getLocation());
+                nextTarget.damage(subsequentDamage, player);
+                nextTarget.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, weaknessDuration, weaknessAmplifier));
+                struckEntities.add(nextTarget);
+                currentTarget = nextTarget;
+            } else {
+                break; // No more targets in range
+            }
+        }
+
+        cooldownManager.setCooldown(player, TrimPattern.BOLT, cooldown);
+        sendActivationMessage(player);
+    }
+
+    private LivingEntity getTarget(Player player, int range) {
+        Collection<Entity> nearbyEntities = player.getNearbyEntities(range, range, range);
+        LivingEntity target = null;
+        double minAngle = Double.MAX_VALUE;
+
+        for (Entity entity : nearbyEntities) {
+            if (entity instanceof LivingEntity && player.hasLineOfSight(entity)) {
+                if (entity instanceof Player targetPlayer && trustManager.isTrusted(player.getUniqueId(), targetPlayer.getUniqueId())) {
+                    continue;
+                }
+                double angle = player.getLocation().getDirection().angle(entity.getLocation().toVector().subtract(player.getLocation().toVector()));
+                if (angle < minAngle) {
+                    minAngle = angle;
+                    target = (LivingEntity) entity;
+                }
+            }
+        }
+        // Check if the angle is within a reasonable cone (e.g., 0.2 radians)
+        if(target != null && minAngle < 0.2){
+            return target;
+        }
+        return null;
+    }
+
+
+    private LivingEntity findNextTarget(LivingEntity from, int range, List<LivingEntity> excluded, Player caster) {
+        LivingEntity closest = null;
+        double closestDistSq = Double.MAX_VALUE;
+
+        for (Entity entity : from.getNearbyEntities(range, range, range)) {
+            if (entity instanceof LivingEntity && !excluded.contains(entity) && !entity.equals(caster)) {
+                 if (entity instanceof Player targetPlayer && trustManager.isTrusted(caster.getUniqueId(), targetPlayer.getUniqueId())) {
+                    continue;
+                }
+                double distSq = entity.getLocation().distanceSquared(from.getLocation());
+                if (distSq < closestDistSq) {
+                    closest = (LivingEntity) entity;
+                    closestDistSq = distSq;
+                }
+            }
+        }
+        return closest;
+    }
+
+
+    private void sendActivationMessage(Player player) {
+        Component message = Component.text("[", NamedTextColor.DARK_GRAY)
+                .append(Component.text("Bolt", NamedTextColor.YELLOW))
+                .append(Component.text("] ", NamedTextColor.DARK_GRAY))
+                .append(Component.text("You have activated ", NamedTextColor.GRAY))
+                .append(Component.text("Chain Lightning", NamedTextColor.YELLOW))
+                .append(Component.text("!", NamedTextColor.GRAY));
+        player.sendMessage(message);
+    }
+}

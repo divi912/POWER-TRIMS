@@ -25,6 +25,7 @@ import MCplugin.powerTrims.commands.PowerTrimsCommand;
 import MCplugin.powerTrims.commands.ResetCooldownsCommand;
 import MCplugin.powerTrims.integrations.PlaceholderIntegration;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
+//import MCplugin.powerTrims.ultimates.SilenceUlt; coming soon
 import com.jeff_media.armorequipevent.ArmorEquipEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -35,6 +36,9 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
+
+import java.util.Objects;
 
 
 public final class PowerTrimss extends JavaPlugin implements Listener {
@@ -42,6 +46,7 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
     private DataManager dataManager;
     private PersistentTrustManager trustManager;
     private ConfigManager configManager;
+    private TrimEffectManager trimEffectManager;
 
 
     @Override
@@ -79,15 +84,16 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
         // Register core events
         ArmorEquipEvent.registerListener(this);
-        new TrimEffectManager(this);
+        this.trimEffectManager = new TrimEffectManager(this, configManager);
         getServer().getPluginManager().registerEvents(this, this);
         getServer().getPluginManager().registerEvents(new LoreChanger(), this);
+        //getServer().getPluginManager().registerEvents(new SilenceUlt(this), this);
 
         // Register commands
-        getCommand("trust").setExecutor(this);
-        getCommand("untrust").setExecutor(this);
-        getCommand("resettrimcooldowns").setExecutor(new ResetCooldownsCommand(this));
-        getCommand("powertrims").setExecutor(new PowerTrimsCommand(configManager));
+        Objects.requireNonNull(getCommand("trust")).setExecutor(this);
+        Objects.requireNonNull(getCommand("untrust")).setExecutor(this);
+        Objects.requireNonNull(getCommand("resettrimcooldowns")).setExecutor(new ResetCooldownsCommand(this));
+        Objects.requireNonNull(getCommand("powertrims")).setExecutor(new PowerTrimsCommand(configManager));
 
         // Stylish startup message
         getLogger().info(ChatColor.GREEN + "--------------------------------------");
@@ -95,7 +101,18 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         getLogger().info(ChatColor.AQUA + "   Made by " + ChatColor.BOLD + "div");
         getLogger().info(ChatColor.GREEN + "--------------------------------------");
 
-
+        // Start the repeating task to check armor effects
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (Bukkit.getOnlinePlayers().isEmpty()) {
+                    return;
+                }
+                for (Player player : Bukkit.getOnlinePlayers()) {
+                    trimEffectManager.applyTrimEffects(player);
+                }
+            }
+        }.runTaskTimer(this, 0L, 20L); // Run every second
     }
 
 

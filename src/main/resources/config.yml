@@ -1,11 +1,33 @@
 # POWER-TRIMS Configuration
 
 # This file contains the configuration for the PowerTrims plugin.
+
 # You can modify the values here to change the behavior of the trims.
-# To reload the configuration, use the command /powertrims reload
+
+# To reload the configuration, use the command /powertrims reload, right now using reload command
+# only affects enable and disabling of trims, to change the ability values restart the server
+
+# Global settings for enabling or disabling entire trim powers.
+trims:
+  sentry: true
+  silence: true
+  vex: true
+  ward: true
+  wild: true
+  coast: true
+  dune: true
+  eye: true
+  host: true
+  raiser: true
+  rib: true
+  snout: true
+  spire: true
+  tide: true
+  wayfinder: true
+  flow: true
 
 cooldown-display: SCOREBOARD  # Options: SCOREBOARD, ACTION_BAR. Default is Scoreboard
-activation-slot: 8 # to change this to some other slot, reduce 1 from the slot you want to use and plug it here
+
   # POWER-TRIMS Configuration
 sentry:
   primary:
@@ -118,7 +140,6 @@ tide:
 wayfinder:
   primary:
     cooldown: 120000
-    enabled: true
 flow:
   primary:
     heart_cost_interval: 20

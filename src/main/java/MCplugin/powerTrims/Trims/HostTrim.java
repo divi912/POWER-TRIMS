@@ -101,8 +101,15 @@ public class HostTrim implements Listener {
 
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
+        // Check if the player is sneaking when they press the offhand key
+        if (!configManager.isTrimEnabled("host")) {
+            return;
+        }
         if (event.getPlayer().isSneaking()) {
+            // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);
+
+            // Activate the ability
             activateHostPrimary(event.getPlayer());
         }
     }
