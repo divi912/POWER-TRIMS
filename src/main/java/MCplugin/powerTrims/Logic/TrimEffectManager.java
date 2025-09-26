@@ -79,7 +79,7 @@ public class TrimEffectManager implements Listener {
     public void applyTrimEffects(Player player) {
         TrimPattern equipped = ArmourChecking.getEquippedTrim(player); // Get the one matching trim
 
-        // Remove all passive effects first to handle unequipping or switching trims
+        // Remove all passive effects first to handle unequipping or switching
         for (List<PotionEffect> effects : passiveEffects.values()) {
             for (PotionEffect effect : effects) {
                 player.removePotionEffect(effect.getType());
