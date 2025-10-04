@@ -1,6 +1,6 @@
 # ✨ Power Trims ✨
 
-A Spigot plugin that grants unique, powerful abilities to each distinct Armor Trim set.
+A Spigot / Paper plugin that grants unique, powerful abilities to each distinct Armor Trim set.
 
 ## 🌟 Features
 
@@ -15,7 +15,7 @@ A Spigot plugin that grants unique, powerful abilities to each distinct Armor Tr
 
 ## 🚀 Installation
 
-1. Download the current latest version from the [Github Page](https://github.com/divi912/POWER-TRIMS/releases/tag/v1.2.2).
+1. Download the current latest version from the [Github Page](https://github.com/divi912/POWER-TRIMS/releases/).
 
 2. Place the `PowerTrims.jar` file into your server's `/plugins` folder.
 
@@ -48,11 +48,11 @@ Power Trims is designed to be highly customizable. In the `config.yml` file, you
 
 * For a complete guide on every ability, please visit the [**Official Wiki**](https://github.com/divi912/POWER-TRIMS/wiki).
 
-* Have questions, suggestions, or need help? Contact me on **Discord**: `_divi._` or open a new issue on this repo or ask in disscussions
+* Have questions, suggestions, or need help? Contact me on **Discord**: `_divi._` or ask in discussions in the discord [**Discord Server**](https://dsc.gg/divisprojects)
 
 ## 🤝 Contributing
 
-Contributing is currently closed, but feel free to submit [**Issues**](https://www.google.com/search?q=https://github.com/divi912/POWER-TRIMS/issues) for bug reports or feature requests!
+Contributing is currently closed, but feel free to submit [**Issues**](https://github.com/divi912/POWER-TRIMS/issues) for bug reports or feature requests!
 
 ## 📜 License
 
