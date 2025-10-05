@@ -25,6 +25,7 @@ trims:
   tide: true
   wayfinder: true
   flow: true
+  bolt: true
 
 cooldown-display: SCOREBOARD  # Options: SCOREBOARD, ACTION_BAR. Default is Scoreboard
 
@@ -146,3 +147,13 @@ flow:
     heart_cost_amount: 2.0
     cooldown: 60000
     duration: 400
+bolt:
+  primary:
+    cooldown: 20000
+    chain_range: 10
+    max_chains: 3
+    initial_damage: 6.0
+    subsequent_damage: 4.0
+    target_range: 20
+    weakness_duration: 100
+    weakness_amplifier: 0

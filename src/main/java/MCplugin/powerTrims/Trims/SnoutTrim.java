@@ -21,13 +21,8 @@
 
 package MCplugin.powerTrims.Trims;
 
-import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.ConfigManager;
-import MCplugin.powerTrims.Logic.PersistentTrustManager;
-import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
@@ -38,7 +33,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
-import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.ItemStack;
@@ -56,6 +50,7 @@ public class SnoutTrim implements Listener {
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
     private final ConfigManager configManager;
+    private final AbilityManager abilityManager;
 
     // --- CONSTANTS ---
     private final long ROAR_COOLDOWN;
@@ -72,40 +67,41 @@ public class SnoutTrim implements Listener {
     // Map a player's UUID to their personal list of minions.
     private final Map<UUID, List<WitherSkeleton>> playerMinions = new HashMap<>();
 
-    public SnoutTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
+    public SnoutTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
         this.configManager = configManager;
+        this.abilityManager = abilityManager;
 
-        ROAR_COOLDOWN = configManager.getLong("snout.primary.cooldown", 120_000L);
-        MINION_LIFESPAN_TICKS = configManager.getLong("snout.primary.minion_lifespan_ticks", 1800L);
+        ROAR_COOLDOWN = configManager.getLong("snout.primary.cooldown");
+        MINION_LIFESPAN_TICKS = configManager.getLong("snout.primary.minion_lifespan_ticks");
 
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
+        abilityManager.registerPrimaryAbility(TrimPattern.SNOUT, this::activateSnoutPrimary);
     }
 
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
-        // Check if the player is sneaking when they press the offhand key
-        if (!configManager.isTrimEnabled("snout")) {
-            return;
-        }
         if (event.getPlayer().isSneaking()) {
             // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);
 
             // Activate the ability
-           activateSnoutPrimary(event.getPlayer());
+           abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
 
     public void activateSnoutPrimary(Player player) {
+        if (!configManager.isTrimEnabled("snout")) {
+            return;
+        }
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.SNOUT) || cooldownManager.isOnCooldown(player, TrimPattern.SNOUT)) {
             return;
         }
 
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
-            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
 
@@ -126,7 +122,7 @@ public class SnoutTrim implements Listener {
                 skel.getPersistentDataContainer().set(SUMMONER_KEY, PersistentDataType.STRING, player.getUniqueId().toString());
 
                 // Set appearance and stats
-                skel.customName(Component.text("Necromancer's Minion", NamedTextColor.DARK_GRAY));
+                skel.setCustomName(ChatColor.DARK_GRAY + "Necromancer's Minion");
                 skel.setCustomNameVisible(true);
                 skel.setHealth(20.0);
 
@@ -156,7 +152,7 @@ public class SnoutTrim implements Listener {
         }
 
         cooldownManager.setCooldown(player, TrimPattern.SNOUT, ROAR_COOLDOWN);
-        player.sendMessage(Component.text("[Snout] You have summoned your Minions!", NamedTextColor.DARK_RED));
+        Messaging.sendTrimMessage(player, "Snout", ChatColor.DARK_RED, "You have summoned your Minions!");
     }
 
     /**

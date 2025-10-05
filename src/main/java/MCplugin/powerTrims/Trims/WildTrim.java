@@ -21,10 +21,7 @@
 
 package MCplugin.powerTrims.Trims;
 
-import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.ConfigManager;
-import MCplugin.powerTrims.Logic.PersistentTrustManager;
-import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.block.Block;
@@ -52,6 +49,7 @@ public class WildTrim implements Listener {
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final ConfigManager configManager;
+    private final AbilityManager abilityManager;
 
     // --- CONSTANTS ---
     private final int PASSIVE_TRIGGER_HEALTH;
@@ -68,28 +66,34 @@ public class WildTrim implements Listener {
     private final Set<UUID> frozenEntities = new HashSet<>();
 
 
-    public WildTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
+    public WildTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
         this.configManager = configManager;
+        this.abilityManager = abilityManager;
 
-        PASSIVE_TRIGGER_HEALTH = configManager.getInt("wild.passive.trigger_health", 8);
-        PASSIVE_COOLDOWN_SECONDS = configManager.getInt("wild.passive.cooldown_seconds", 20);
-        PRIMARY_COOLDOWN = configManager.getLong("wild.primary.cooldown", 20000);
-        GRAPPLE_RANGE = configManager.getDouble("wild.primary.grapple_range", 60.0);
-        POISON_DURATION_TICKS = configManager.getInt("wild.primary.poison_duration_ticks", 200);
-        GRAPPLE_SPEED = configManager.getDouble("wild.primary.grapple_speed", 1.8);
-        ROOT_TRAP_RADIUS_XZ = configManager.getDouble("wild.passive.root_trap_radius_xz", 5);
-        ROOT_TRAP_RADIUS_Y = configManager.getDouble("wild.passive.root_trap_radius_y", 3);
-        ROOT_TRAP_DURATION_TICKS = configManager.getInt("wild.passive.root_trap_duration_ticks", 200);
+        PASSIVE_TRIGGER_HEALTH = configManager.getInt("wild.passive.trigger_health");
+        PASSIVE_COOLDOWN_SECONDS = configManager.getInt("wild.passive.cooldown_seconds");
+        PRIMARY_COOLDOWN = configManager.getLong("wild.primary.cooldown");
+        GRAPPLE_RANGE = configManager.getDouble("wild.primary.grapple_range");
+        POISON_DURATION_TICKS = configManager.getInt("wild.primary.poison_duration_ticks");
+        GRAPPLE_SPEED = configManager.getDouble("wild.primary.grapple_speed");
+        ROOT_TRAP_RADIUS_XZ = configManager.getDouble("wild.passive.root_trap_radius_xz");
+        ROOT_TRAP_RADIUS_Y = configManager.getDouble("wild.passive.root_trap_radius_y");
+        ROOT_TRAP_DURATION_TICKS = configManager.getInt("wild.passive.root_trap_duration_ticks");
+
+        abilityManager.registerPrimaryAbility(TrimPattern.WILD, this::WildPrimary);
     }
 
 
 
     public void WildPrimary(Player player) {
+        if (!configManager.isTrimEnabled("wild")) {
+            return;
+        }
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
-            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WILD)) return;
@@ -116,29 +120,29 @@ public class WildTrim implements Listener {
         // Grapple to the entity under the crosshair
         if (entityHit != null && entityHit.getHitEntity() instanceof LivingEntity targetEntity) {
             if (targetEntity instanceof Player targetPlayer && trustManager.isTrusted(wildUser.getUniqueId(), targetPlayer.getUniqueId())) {
-                player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] Grappling to trusted player!");
+                Messaging.sendTrimMessage(player, "Wild", ChatColor.GREEN, "Grappling to trusted player!");
                 visualizeGrapple(player, targetEntity.getLocation().add(0, 1, 0));
                 smoothlyPullPlayer(player, targetEntity.getLocation().add(0, 1, 0));
             } else {
                 // Grapple to the entity under the crosshair
-                player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] Grappling to entity!");
+                Messaging.sendTrimMessage(player, "Wild", ChatColor.GREEN, "Grappling to entity!");
                 visualizeGrapple(player, targetEntity.getLocation().add(0, 1, 0));
                 smoothlyPullPlayer(player, targetEntity.getLocation().add(0, 1, 0));
                 targetEntity.addPotionEffect(new PotionEffect(PotionEffectType.POISON, POISON_DURATION_TICKS, 1, true, false, true));
-                targetEntity.sendMessage(ChatColor.GREEN + "[§cWild§8] You have been Poisoned for " + (POISON_DURATION_TICKS/20) + " sec!");
+                if(targetEntity instanceof Player) Messaging.sendTrimMessage((Player) targetEntity, "Wild", ChatColor.RED, "You have been Poisoned for " + (POISON_DURATION_TICKS/20) + " sec!");
                 abilityUsed = true;
             }
         } else {
             // Grapple to the block under the crosshair if no entity is found
             Block targetBlock = player.getTargetBlockExact((int) range);
             if (targetBlock != null && !targetBlock.getType().isAir()) {
-                player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] Grappling to block!");
+                Messaging.sendTrimMessage(player, "Wild", ChatColor.GREEN, "Grappling to block!");
                 visualizeGrapple(player, targetBlock.getLocation().add(0.5, 1, 0.5));
                 smoothlyPullPlayer(player, targetBlock.getLocation().add(0.5, 1, 0.5));
                 abilityUsed = true;
             } else {
                 // No valid target
-                player.sendMessage(ChatColor.RED + "§8[§cWild§8] No valid target found!");
+                Messaging.sendTrimMessage(player, "Wild", ChatColor.RED, "No valid target found!");
             }
         }
 
@@ -228,7 +232,7 @@ public class WildTrim implements Listener {
             event.setCancelled(true);
 
             // Activate the ability
-            WildPrimary(event.getPlayer());
+            abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
 
@@ -239,7 +243,7 @@ public class WildTrim implements Listener {
     public void onPlayerDamage(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player player)) return;
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
-            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WILD)) return;
@@ -247,7 +251,7 @@ public class WildTrim implements Listener {
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (player.getHealth() > PASSIVE_TRIGGER_HEALTH) return;
             if (isPassiveOnCooldown(player)) {
-                player.sendMessage(ChatColor.RED + "§8[§cWild§8] Root Trap is on cooldown!");
+                Messaging.sendTrimMessage(player, "Wild", ChatColor.RED, "Root Trap is on cooldown!");
                 return;
             }
 
@@ -258,12 +262,12 @@ public class WildTrim implements Listener {
 
     public void activateRootTrap(Player player) {
         if (isPassiveOnCooldown(player)) {
-            player.sendMessage(ChatColor.RED + "§8[§cWild§8] Root Trap is on cooldown!");
+            Messaging.sendTrimMessage(player, "Wild", ChatColor.RED, "Root Trap is on cooldown!");
             return;
         }
 
         setPassiveCooldown(player);
-        player.sendMessage(ChatColor.GREEN + "§8[§cWild§8] You activated Root Trap!");
+        Messaging.sendTrimMessage(player, "Wild", ChatColor.GREEN, "You activated Root Trap!");
 
         List<LivingEntity> affectedEntities = new ArrayList<>();
         for (Entity entity : player.getNearbyEntities(ROOT_TRAP_RADIUS_XZ, ROOT_TRAP_RADIUS_Y, ROOT_TRAP_RADIUS_XZ)) {

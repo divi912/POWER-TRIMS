@@ -21,9 +21,7 @@
 
 package MCplugin.powerTrims.Trims;
 
-import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.ConfigManager;
-import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.entity.Player;
@@ -43,30 +41,31 @@ public class WayfinderTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final ConfigManager configManager;
+    private final AbilityManager abilityManager;
     private final NamespacedKey effectKey;
     private final long TELEPORT_COOLDOWN;
     private final Map<UUID, Location> markedLocations = new HashMap<>();
-    private final boolean wayfinderEnabled;
 
-    public WayfinderTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, ConfigManager configManager) {
+    public WayfinderTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.configManager = configManager;
+        this.abilityManager = abilityManager;
         this.effectKey = new NamespacedKey(plugin, "wayfinder_trim_effect");
-        this.TELEPORT_COOLDOWN = configManager.getLong("wayfinder.primary.cooldown", 120000);
-        this.wayfinderEnabled = configManager.getBoolean("wayfinder.primary.enabled", true);
+        this.TELEPORT_COOLDOWN = configManager.getLong("wayfinder.primary.cooldown");
+
+        abilityManager.registerPrimaryAbility(TrimPattern.WAYFINDER, this::WayfinderPrimary);
     }
 
 
 
     public void WayfinderPrimary(Player player) {
-
-        if (!wayfinderEnabled) {
+        if (!configManager.isTrimEnabled("ward")) {
             return;
         }
 
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
-            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WAYFINDER)) {
@@ -84,7 +83,7 @@ public class WayfinderTrim implements Listener {
             // Teleport back to the marked location and clear the marker
             Location mark = markedLocations.remove(uuid);
             player.teleport(mark);
-            player.sendMessage(ChatColor.AQUA + "You have returned to your marked location!");
+            Messaging.sendTrimMessage(player, "Wayfinder", ChatColor.AQUA, "You have returned to your marked location!");
             player.playSound(mark, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.0f);
             // Create a teleportation particle effect visible to all
             world.spawnParticle(Particle.PORTAL, mark, 100, 1, 1, 1, 0.5);
@@ -94,7 +93,7 @@ public class WayfinderTrim implements Listener {
             // Mark current location without teleporting
             Location mark = player.getLocation();
             markedLocations.put(uuid, mark);
-            player.sendMessage(ChatColor.DARK_AQUA + "You have marked this location!");
+            Messaging.sendTrimMessage(player, "Wayfinder", ChatColor.DARK_AQUA, "You have marked this location!");
             player.playSound(mark, Sound.BLOCK_BEACON_ACTIVATE, 1.0f, 1.0f);
             world.spawnParticle(Particle.HAPPY_VILLAGER, mark, 50, 0.5, 0.5, 0.5, 0.1);
         }
@@ -111,7 +110,7 @@ public class WayfinderTrim implements Listener {
             event.setCancelled(true);
 
             // Activate the ability
-            WayfinderPrimary(event.getPlayer());
+            abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
 }

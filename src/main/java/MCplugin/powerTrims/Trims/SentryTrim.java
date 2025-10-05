@@ -1,9 +1,6 @@
 package MCplugin.powerTrims.Trims;
 
-import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.ConfigManager;
-import MCplugin.powerTrims.Logic.PersistentTrustManager;
-import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.entity.*;
@@ -28,6 +25,7 @@ public class SentryTrim implements Listener {
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final ConfigManager configManager;
+    private final AbilityManager abilityManager;
     private final NamespacedKey effectKey;
     private final Set<UUID> activeGuards;
 
@@ -37,27 +35,33 @@ public class SentryTrim implements Listener {
     private final long COOLDOWN;
     private final double TRUE_DAMAGE;
 
-    public SentryTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
+    public SentryTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
         this.configManager = configManager;
+        this.abilityManager = abilityManager;
         this.effectKey = new NamespacedKey(plugin, "sentry_trim_effect");
         this.activeGuards = new HashSet<>();
 
-        ARROW_COUNT = configManager.getInt("sentry.primary.arrow_count", 3);
-        SPREAD = configManager.getDouble("sentry.primary.spread", 0.15);
-        COOLDOWN = configManager.getLong("sentry.primary.cooldown", 90000);
-        TRUE_DAMAGE = configManager.getDouble("sentry.primary.true_damage", 0.5);
+        ARROW_COUNT = configManager.getInt("sentry.primary.arrow_count");
+        SPREAD = configManager.getDouble("sentry.primary.spread");
+        COOLDOWN = configManager.getLong("sentry.primary.cooldown");
+        TRUE_DAMAGE = configManager.getDouble("sentry.primary.true_damage");
+
+        abilityManager.registerPrimaryAbility(TrimPattern.SENTRY, this::SentryPrimary);
     }
 
 
     public void SentryPrimary(Player player) {
+        if (!configManager.isTrimEnabled("sentry")) {
+            return;
+        }
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.SENTRY) ||
                 cooldownManager.isOnCooldown(player, TrimPattern.SENTRY)) return;
 
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
-            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
 
@@ -118,8 +122,7 @@ public class SentryTrim implements Listener {
         // Create the barrage particle effect at the player's eye level
         createBarrageEffect(player);
 
-        player.sendMessage(ChatColor.GRAY + "[" + ChatColor.YELLOW + "Sentry" + ChatColor.GRAY + "] "
-                + ChatColor.GOLD + "Barrage launched!");
+        Messaging.sendTrimMessage(player, "Sentry", ChatColor.YELLOW, "Barrage launched!");
         world.playSound(player.getLocation(), Sound.ENTITY_ILLUSIONER_CAST_SPELL, 1.0f, 1.0f);
 
         cooldownManager.setCooldown(player, TrimPattern.SENTRY, COOLDOWN);
@@ -190,7 +193,7 @@ public class SentryTrim implements Listener {
             event.setCancelled(true);
 
             // Activate the ability
-            SentryPrimary(event.getPlayer());
+            abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
 }

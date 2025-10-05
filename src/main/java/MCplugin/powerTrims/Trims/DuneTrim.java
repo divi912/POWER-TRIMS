@@ -21,10 +21,7 @@
 
 package MCplugin.powerTrims.Trims;
 
-import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.ConfigManager;
-import MCplugin.powerTrims.Logic.PersistentTrustManager;
-import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
@@ -46,21 +43,25 @@ public class DuneTrim implements Listener {
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final ConfigManager configManager;
+    private final AbilityManager abilityManager;
     private final NamespacedKey effectKey;
     private final int SANDSTORM_RADIUS;
     private final int SANDSTORM_DAMAGE;
     private final long SANDSTORM_COOLDOWN;
 
-    public DuneTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
+    public DuneTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
         this.configManager = configManager;
+        this.abilityManager = abilityManager;
         this.effectKey = new NamespacedKey(plugin, "dune_trim_effect");
 
-        SANDSTORM_RADIUS = configManager.getInt("dune.primary.sandstorm_radius", 12);
-        SANDSTORM_DAMAGE = configManager.getInt("dune.primary.sandstorm_damage", 10);
-        SANDSTORM_COOLDOWN = configManager.getLong("dune.primary.cooldown", 60000);
+        SANDSTORM_RADIUS = configManager.getInt("dune.primary.sandstorm_radius");
+        SANDSTORM_DAMAGE = configManager.getInt("dune.primary.sandstorm_damage");
+        SANDSTORM_COOLDOWN = configManager.getLong("dune.primary.cooldown");
+
+        abilityManager.registerPrimaryAbility(TrimPattern.DUNE, this::DunePrimary);
     }
 
 
@@ -96,6 +97,9 @@ public class DuneTrim implements Listener {
     }
 
     public void DunePrimary(Player player) {
+        if (!configManager.isTrimEnabled("dune")) {
+            return;
+        }
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.DUNE)) {
             return;
         }
@@ -103,7 +107,7 @@ public class DuneTrim implements Listener {
             return;
         }
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
-            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
 
@@ -145,21 +149,14 @@ public class DuneTrim implements Listener {
         player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 600, 1));
 
         cooldownManager.setCooldown(player, TrimPattern.DUNE, SANDSTORM_COOLDOWN);
-        player.sendMessage("§8[§6Dune§8] §7You have unleashed a " + ChatColor.GOLD + "Sandstorm" + ChatColor.GRAY + "!");
+        Messaging.sendTrimMessage(player, "Dune", ChatColor.GOLD, "You have unleashed a " + ChatColor.GOLD + "Sandstorm" + ChatColor.GRAY + "!");
     }
 
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
-        // Check if the player is sneaking when they press the offhand key
-        if (!configManager.isTrimEnabled("dune")) {
-            return;
-        }
         if (event.getPlayer().isSneaking()) {
-            // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);
-
-            // Activate the ability
-            DunePrimary(event.getPlayer());
+            abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
 }

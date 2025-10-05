@@ -18,7 +18,6 @@ import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -36,10 +35,7 @@ public class BoltTrim implements Listener {
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
         this.configManager = configManager;
-        plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
-
-
 
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
@@ -51,6 +47,9 @@ public class BoltTrim implements Listener {
 
     // Active: Chain Lightning
     public void activateBoltPrimary(Player player) {
+        if (!configManager.isTrimEnabled("bolt")) {
+            return;
+        }
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.BOLT)) {
             return;
         }
@@ -63,15 +62,14 @@ public class BoltTrim implements Listener {
         }
 
         // Config values
-        long cooldown = configManager.getLong("bolt.primary.cooldown", 20000L);
-        int chainRange = configManager.getInt("bolt.primary.chain_range", 10);
-        int maxChains = configManager.getInt("bolt.primary.max_chains", 3);
-        double initialDamage = configManager.getDouble("bolt.primary.initial_damage", 6.0);
-        double subsequentDamage = configManager.getDouble("bolt.primary.subsequent_damage", 4.0);
-        int targetRange = configManager.getInt("bolt.primary.target_range", 20);
-        int weaknessDuration = configManager.getInt("bolt.primary.weakness_duration", 100); // 5 seconds
-        int weaknessAmplifier = configManager.getInt("bolt.primary.weakness_amplifier", 0); // Weakness I
-
+        long cooldown = configManager.getLong("bolt.primary.cooldown");
+        int chainRange = configManager.getInt("bolt.primary.chain_range");
+        int maxChains = configManager.getInt("bolt.primary.max_chains");
+        double initialDamage = configManager.getDouble("bolt.primary.initial_damage");
+        double subsequentDamage = configManager.getDouble("bolt.primary.subsequent_damage");
+        int targetRange = configManager.getInt("bolt.primary.target_range");
+        int weaknessDuration = configManager.getInt("bolt.primary.weakness_duration"); // 5 seconds
+        int weaknessAmplifier = configManager.getInt("bolt.primary.weakness_amplifier"); // Weakness I
 
         LivingEntity target = getTarget(player, targetRange);
 
@@ -84,7 +82,6 @@ public class BoltTrim implements Listener {
         world.strikeLightningEffect(target.getLocation());
         target.damage(initialDamage, player);
         target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, weaknessDuration, weaknessAmplifier));
-
 
         List<LivingEntity> struckEntities = new ArrayList<>();
         struckEntities.add(target);
@@ -131,7 +128,6 @@ public class BoltTrim implements Listener {
         return null;
     }
 
-
     private LivingEntity findNextTarget(LivingEntity from, int range, List<LivingEntity> excluded, Player caster) {
         LivingEntity closest = null;
         double closestDistSq = Double.MAX_VALUE;
@@ -150,7 +146,6 @@ public class BoltTrim implements Listener {
         }
         return closest;
     }
-
 
     private void sendActivationMessage(Player player) {
         Component message = Component.text("[", NamedTextColor.DARK_GRAY)

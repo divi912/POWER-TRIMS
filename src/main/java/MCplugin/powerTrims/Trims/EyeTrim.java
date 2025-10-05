@@ -20,10 +20,7 @@
 
 package MCplugin.powerTrims.Trims;
 
-import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.ConfigManager;
-import MCplugin.powerTrims.Logic.PersistentTrustManager;
-import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
@@ -50,6 +47,7 @@ public class EyeTrim implements Listener {
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
     private final ConfigManager configManager;
+    private final AbilityManager abilityManager;
 
     // --- CONSTANTS ---
     private final double TRUE_SIGHT_RADIUS;
@@ -61,41 +59,42 @@ public class EyeTrim implements Listener {
     // --- STATE MANAGEMENT ---
     private final Map<UUID, BukkitRunnable> activeTrueSightTasks = new HashMap<>();
 
-    public EyeTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
+    public EyeTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
         this.configManager = configManager;
+        this.abilityManager = abilityManager;
 
-        TRUE_SIGHT_RADIUS = configManager.getDouble("eye.primary.true_sight_radius", 80.0);
-        TRUE_SIGHT_DURATION_TICKS = configManager.getInt("eye.primary.true_sight_duration_ticks", 600);
-        TRUE_SIGHT_COOLDOWN = configManager.getLong("trim.eye.primary.cooldown", 120_000L);
-        TASK_INTERVAL_TICKS = configManager.getLong("eye.primary.task_interval_ticks", 20L);
-        TRUE_SIGHT_VERTICAL_RADIUS = configManager.getDouble("eye.primary.true_sight_vertical_radius", 50.0);
+        TRUE_SIGHT_RADIUS = configManager.getDouble("eye.primary.true_sight_radius");
+        TRUE_SIGHT_DURATION_TICKS = configManager.getInt("eye.primary.true_sight_duration_ticks");
+        TRUE_SIGHT_COOLDOWN = configManager.getLong("trim.eye.primary.cooldown");
+        TASK_INTERVAL_TICKS = configManager.getLong("eye.primary.task_interval_ticks");
+        TRUE_SIGHT_VERTICAL_RADIUS = configManager.getDouble("eye.primary.true_sight_vertical_radius");
 
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
+        abilityManager.registerPrimaryAbility(TrimPattern.EYE, this::activateEyePrimary);
     }
 
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
-        // Check if the player is sneaking when they press the offhand key
-        if (!configManager.isTrimEnabled("eye")) {
-            return;
-        }
         if (event.getPlayer().isSneaking()) {
             // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);
 
             // Activate the ability
-            activateEyePrimary(event.getPlayer());
+            abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
 
     public void activateEyePrimary(Player player) {
+        if (!configManager.isTrimEnabled("eye")) {
+            return;
+        }
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.EYE)) return;
         if (cooldownManager.isOnCooldown(player, TrimPattern.EYE)) return;
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
-            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
 
@@ -162,7 +161,7 @@ public class EyeTrim implements Listener {
         trueSightTask.runTaskTimer(plugin, 0L, TASK_INTERVAL_TICKS);
 
         cooldownManager.setCooldown(player, TrimPattern.EYE, TRUE_SIGHT_COOLDOWN);
-        player.sendMessage("§8[§bEye§8] §7True Sight activated!");
+        Messaging.sendTrimMessage(player, "Eye", ChatColor.AQUA, "True Sight activated!");
     }
 
     /**

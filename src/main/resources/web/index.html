@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerTrims Configuration</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --primary-hover: #0056b3;
+            --background-color: #f0f2f5;
+            --container-bg: #ffffff;
+            --text-color: #333;
+            --label-color: #606770;
+            --border-color: #dddfe2;
+            --section-header-bg: #f5f6f7;
+        }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 2em;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+        h1 { 
+            color: var(--primary-color);
+            text-align: center;
+            margin-bottom: 1.5em;
+        }
+        .container { 
+            background-color: var(--container-bg);
+            padding: 2em;
+            border-radius: 8px;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .section {
+            margin-bottom: 1.5em;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .section-title {
+            cursor: pointer;
+            background-color: var(--section-header-bg);
+            color: #4b4f56;
+            padding: 15px 20px;
+            margin: 0;
+            font-size: 1.1em;
+            font-weight: 600;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .section-title:hover { background-color: #e9ebee; }
+        .section-title::after {
+            content: '▼';
+            font-size: 0.8em;
+            transition: transform 0.2s;
+        }
+        .section-title.open::after {
+            transform: rotate(180deg);
+        }
+        .content {
+            display: none;
+            padding: 20px;
+            border-top: 1px solid var(--border-color);
+            background-color: #fafafa;
+        }
+        .content.open { display: block; }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--label-color);
+            font-size: 0.9em;
+        }
+        input[type="text"], input[type="number"], select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccd0d5;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 1em;
+        }
+        .save-btn {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 14px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: 600;
+            display: block;
+            width: 100%;
+            margin-top: 1.5em;
+            transition: background-color 0.2s;
+        }
+        .save-btn:hover { background-color: var(--primary-hover); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>PowerTrims Configuration</h1>
+    <form id="config-form"></form>
+    <button class="save-btn" onclick="saveConfig()">Save & Reload Configuration</button>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('/api/config')
+            .then(response => response.ok ? response.json() : Promise.reject('Failed to load config'))
+            .then(data => {
+                const form = document.getElementById('config-form');
+                buildForm(data, form);
+            })
+            .catch(error => {
+                const form = document.getElementById('config-form');
+                form.innerHTML = `<p style="color: red; text-align: center;">Error loading configuration: ${error}. Please check the server console.</p>`;
+            });
+    });
+
+    function buildForm(data, parentElement) {
+        const knownNonTrims = ['trims', 'cooldown-display'];
+
+        // --- Global & Toggles Sections (Always Open) ---
+        const globalSection = createSection(parentElement, 'Global Settings', true);
+        const globalGrid = document.createElement('div');
+        globalGrid.className = 'form-grid';
+        globalSection.appendChild(globalGrid);
+        createFormField(globalGrid, 'cooldown-display', data['cooldown-display']);
+
+        const trimsSection = createSection(parentElement, 'Trim Toggles', true);
+        const trimsGrid = document.createElement('div');
+        trimsGrid.className = 'form-grid';
+        trimsSection.appendChild(trimsGrid);
+        if (data.trims && typeof data.trims === 'object') {
+            for (const key in data.trims) {
+                createFormField(trimsGrid, 'trims.' + key, data.trims[key]);
+            }
+        }
+
+        // --- Detailed Trim Settings (Collapsible) ---
+        for (const trimName in data) {
+            if (typeof data[trimName] === 'object' && data[trimName] !== null && !knownNonTrims.includes(trimName)) {
+                const sectionContent = createSection(parentElement, `${trimName.charAt(0).toUpperCase() + trimName.slice(1)} Settings`);
+                const grid = document.createElement('div');
+                grid.className = 'form-grid';
+                sectionContent.appendChild(grid);
+                buildNestedForm(data[trimName], trimName, grid);
+            }
+        }
+    }
+
+    function buildNestedForm(obj, path, parentElement) {
+        for (const key in obj) {
+            const newPath = `${path}.${key}`;
+            const value = obj[key];
+            if (typeof value === 'object' && value !== null) {
+                buildNestedForm(value, newPath, parentElement);
+            } else {
+                createFormField(parentElement, newPath, value);
+            }
+        }
+    }
+
+    function createSection(parentElement, title, isOpen = false) {
+        const sectionDiv = document.createElement('div');
+        sectionDiv.className = 'section';
+        const h2 = document.createElement('h2');
+        h2.className = 'section-title';
+        h2.textContent = title;
+        sectionDiv.appendChild(h2);
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'content';
+        sectionDiv.appendChild(contentDiv);
+        parentElement.appendChild(sectionDiv);
+
+        if (isOpen) {
+            contentDiv.classList.add('open');
+            h2.classList.add('open');
+        } else {
+             h2.addEventListener('click', () => {
+                contentDiv.classList.toggle('open');
+                h2.classList.toggle('open');
+            });
+        }
+        return contentDiv;
+    }
+
+    function createFormField(parentElement, key, value) {
+        const group = document.createElement('div');
+        group.className = 'form-group';
+        const label = document.createElement('label');
+        label.setAttribute('for', key);
+        label.textContent = key.replace(/_/g, ' ');
+        group.appendChild(label);
+
+        let input;
+        if (typeof value === 'boolean') {
+            input = document.createElement('select');
+            ['true', 'false'].forEach(val => {
+                const option = document.createElement('option');
+                option.value = val;
+                option.textContent = val.charAt(0).toUpperCase() + val.slice(1);
+                input.appendChild(option);
+            });
+            input.value = String(value);
+        } else {
+            input = document.createElement('input');
+            input.type = (typeof value === 'number') ? 'number' : 'text';
+            if(input.type === 'number') {
+                input.step = (String(value).includes('.')) ? '0.1' : '1';
+            }
+            input.value = value;
+        }
+        
+        input.name = key;
+        input.id = key;
+        group.appendChild(input);
+        parentElement.appendChild(group);
+    }
+
+    function saveConfig() {
+        const form = document.getElementById('config-form');
+        const inputs = form.querySelectorAll('input, select');
+        const config = {};
+        inputs.forEach(input => {
+            const keys = input.name.split('.');
+            let current = config;
+            keys.forEach((key, index) => {
+                if (index === keys.length - 1) {
+                    let value = input.value;
+                    if (input.type === 'number') {
+                        value = Number(value);
+                    } else if (input.tagName.toLowerCase() === 'select') {
+                        value = (value === 'true');
+                    }
+                    current[key] = value;
+                } else {
+                    current[key] = current[key] || {};
+                    current = current[key];
+                }
+            });
+        });
+
+        fetch('/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config),
+        })
+        .then(response => {
+            if(response.ok) {
+                alert('Configuration saved successfully! The plugin has been reloaded.');
+            } else {
+                response.text().then(text => alert(`Error saving configuration: ${text}`));
+            }
+        })
+        .catch(error => alert(`Network error: ${error}`));
+    }
+</script>
+
+</body>
+</html>

@@ -1,19 +1,13 @@
 package MCplugin.powerTrims.Trims;
 
-import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.ConfigManager;
-import MCplugin.powerTrims.Logic.PersistentTrustManager;
-import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -30,22 +24,27 @@ public class CoastTrim implements Listener {
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
     private final ConfigManager configManager;
-    private final int activationSlot;
+    private final AbilityManager abilityManager;
 
-    public CoastTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
+    public CoastTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
         this.configManager = configManager;
-        this.activationSlot = plugin.getConfig().getInt("activation-slot", 8);
+        this.abilityManager = abilityManager;
+
+        abilityManager.registerPrimaryAbility(TrimPattern.COAST, this::CoastPrimary);
     }
 
     // Activates the Coast Trim ability: Water Burst
     public void CoastPrimary(Player player) {
+        if (!configManager.isTrimEnabled("coast")) {
+            return;
+        }
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.COAST)) return;
         if (cooldownManager.isOnCooldown(player, TrimPattern.COAST)) return;
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
-            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
 
@@ -55,16 +54,16 @@ public class CoastTrim implements Listener {
         // Play activation sounds and show particles
         playEffects(playerLoc, world);
 
-        int waterBurstRadius = configManager.getInt("coast.primary.water-burst-radius", 30);
-        int waterBurstDamage = configManager.getInt("coast.primary.water-burst-damage", 10);
-        long waterBurstCooldown = configManager.getLong("coast.primary.water-burst-cooldown", 60000);
-        int pullDurationTicks = configManager.getInt("coast.primary.pull-duration-ticks", 60);
-        int debuffDurationTicks = configManager.getInt("coast.primary.debuff-duration-ticks", 80);
-        int buffDurationTicks = configManager.getInt("coast.primary.buff-duration-ticks", 100);
-        int weaknessAmplifier = configManager.getInt("coast.primary.weakness-amplifier", 1);
-        int slownessAmplifier = configManager.getInt("coast.primary.slowness-amplifier", 1);
-        int speedAmplifier = configManager.getInt("coast.primary.speed-amplifier", 1);
-        int resistanceAmplifier = configManager.getInt("coast.primary.resistance-amplifier", 0);
+        int waterBurstRadius = configManager.getInt("coast.primary.water-burst-radius");
+        int waterBurstDamage = configManager.getInt("coast.primary.water-burst-damage");
+        long waterBurstCooldown = configManager.getLong("coast.primary.water-burst-cooldown");
+        int pullDurationTicks = configManager.getInt("coast.primary.pull-duration-ticks");
+        int debuffDurationTicks = configManager.getInt("coast.primary.debuff-duration-ticks");
+        int buffDurationTicks = configManager.getInt("coast.primary.buff-duration-ticks");
+        int weaknessAmplifier = configManager.getInt("coast.primary.weakness-amplifier");
+        int slownessAmplifier = configManager.getInt("coast.primary.slowness-amplifier");
+        int speedAmplifier = configManager.getInt("coast.primary.speed-amplifier");
+        int resistanceAmplifier = configManager.getInt("coast.primary.resistance-amplifier");
 
         List<LivingEntity> targets = new ArrayList<>();
         for (Entity entity : world.getNearbyEntities(playerLoc, waterBurstRadius, waterBurstRadius, waterBurstRadius)) {
@@ -91,7 +90,7 @@ public class CoastTrim implements Listener {
 
         cooldownManager.setCooldown(player, TrimPattern.COAST, waterBurstCooldown);
 
-        sendActivationMessage(player);
+        Messaging.sendTrimMessage(player, "Coast", ChatColor.DARK_AQUA, "You have activated " + ChatColor.AQUA + "Water Burst!");
     }
 
     private void playEffects(Location location, World world) {
@@ -141,28 +140,11 @@ public class CoastTrim implements Listener {
         }.runTaskTimer(plugin, 0L, 1L);
     }
 
-    private void sendActivationMessage(Player player) {
-        Component message = Component.text("[", NamedTextColor.DARK_GRAY)
-                .append(Component.text("Coast", NamedTextColor.DARK_AQUA))
-                .append(Component.text("] ", NamedTextColor.DARK_GRAY))
-                .append(Component.text("You have activated ", NamedTextColor.GRAY))
-                .append(Component.text("Water Burst", NamedTextColor.AQUA))
-                .append(Component.text("!", NamedTextColor.GRAY));
-        player.sendMessage(message);
-    }
-
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
-        // Check if the player is sneaking when they press the offhand key
-        if (!configManager.isTrimEnabled("coast")) {
-            return;
-        }
         if (event.getPlayer().isSneaking()) {
-            // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);
-
-            // Activate the ability
-            CoastPrimary(event.getPlayer());
+            abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
 }

@@ -1,9 +1,6 @@
 package MCplugin.powerTrims.Trims;
 
-import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.ConfigManager;
-import MCplugin.powerTrims.Logic.PersistentTrustManager;
-import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.entity.EntityType;
@@ -28,6 +25,7 @@ public class HostTrim implements Listener {
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
     private final ConfigManager configManager;
+    private final AbilityManager abilityManager;
 
     private final Map<UUID, Set<PotionEffectType>> amplifiedEffectsTracker = new ConcurrentHashMap<>();
 
@@ -50,17 +48,19 @@ public class HostTrim implements Listener {
             PotionEffectType.FIRE_RESISTANCE, PotionEffectType.RESISTANCE, PotionEffectType.ABSORPTION
     );
 
-    public HostTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
+    public HostTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
         this.configManager = configManager;
+        this.abilityManager = abilityManager;
 
-        ESSENCE_REAPER_COOLDOWN = configManager.getLong("host.primary.cooldown", 120_000L);
-        EFFECT_STEAL_RADIUS = configManager.getDouble("host.primary.effect_steal_radius", 10.0);
-        HEALTH_STEAL_AMOUNT = configManager.getDouble("host.primary.health_steal_amount", 4.0);
-        PARTICLE_DENSITY = configManager.getDouble("host.primary.particle_density", 4.0);
+        ESSENCE_REAPER_COOLDOWN = configManager.getLong("host.primary.cooldown");
+        EFFECT_STEAL_RADIUS = configManager.getDouble("host.primary.effect_steal_radius");
+        HEALTH_STEAL_AMOUNT = configManager.getDouble("host.primary.health_steal_amount");
+        PARTICLE_DENSITY = configManager.getDouble("host.primary.particle_density");
 
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
+        abilityManager.registerPrimaryAbility(TrimPattern.HOST, this::activateHostPrimary);
     }
 
     @EventHandler
@@ -101,27 +101,26 @@ public class HostTrim implements Listener {
 
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
-        // Check if the player is sneaking when they press the offhand key
-        if (!configManager.isTrimEnabled("host")) {
-            return;
-        }
         if (event.getPlayer().isSneaking()) {
             // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);
 
             // Activate the ability
-            activateHostPrimary(event.getPlayer());
+            abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
 
     public void activateHostPrimary(Player player) {
+        if (!configManager.isTrimEnabled("host")) {
+            return;
+        }
         if (cooldownManager.isOnCooldown(player, TrimPattern.HOST) ||
                 !ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.HOST)) {
             return;
         }
 
         if (Bukkit.getPluginManager().isPluginEnabled("WorldGuard") && !WorldGuardIntegration.canUseAbilities(player)) {
-            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
 
@@ -164,7 +163,7 @@ public class HostTrim implements Listener {
         world.spawnParticle(Particle.SOUL, playerLoc, 30, 1, 1, 1, 0.1);
 
         cooldownManager.setCooldown(player, TrimPattern.HOST, ESSENCE_REAPER_COOLDOWN);
-        player.sendMessage(ChatColor.DARK_PURPLE + "Essence Reaper activated!");
+        Messaging.sendTrimMessage(player, "Host", ChatColor.DARK_PURPLE, "Essence Reaper activated!");
     }
 
     private boolean isEffectAmplifiedByHost(UUID playerUUID, PotionEffectType type) {

@@ -21,10 +21,7 @@
 
 package MCplugin.powerTrims.Trims;
 
-import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.ConfigManager;
-import MCplugin.powerTrims.Logic.PersistentTrustManager;
-import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.entity.LivingEntity;
@@ -50,6 +47,7 @@ public class RaiserTrim implements Listener {
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
     private final ConfigManager configManager;
+    private final AbilityManager abilityManager;
 
     // --- CONSTANTS ---
     private final long SURGE_COOLDOWN;
@@ -61,31 +59,30 @@ public class RaiserTrim implements Listener {
     // This set will track players who are currently in the air from this ability
     private final Set<UUID> awaitingLanding = new HashSet<>();
 
-    public RaiserTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
+    public RaiserTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
         this.configManager = configManager;
+        this.abilityManager = abilityManager;
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
 
-        SURGE_COOLDOWN = configManager.getLong("raiser.primary.cooldown", 120000);
-        ENTITY_PULL_RADIUS = configManager.getDouble("raiser.primary.entity_pull_radius", 15.0);
-        PLAYER_UPWARD_BOOST = configManager.getDouble("raiser.primary.player_upward_boost", 1.5);
-        PEARL_COOLDOWN_TICKS = configManager.getInt("raiser.primary.pearl_cooldown_ticks", 200);
+        SURGE_COOLDOWN = configManager.getLong("raiser.primary.cooldown");
+        ENTITY_PULL_RADIUS = configManager.getDouble("raiser.primary.entity_pull_radius");
+        PLAYER_UPWARD_BOOST = configManager.getDouble("raiser.primary.player_upward_boost");
+        PEARL_COOLDOWN_TICKS = configManager.getInt("raiser.primary.pearl_cooldown_ticks");
+
+        abilityManager.registerPrimaryAbility(TrimPattern.RAISER, this::activateRaiserPrimary);
     }
 
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
-        // Check if the player is sneaking when they press the offhand key
-        if (!configManager.isTrimEnabled("raiser")) {
-            return;
-        }
         if (event.getPlayer().isSneaking()) {
             // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);
 
             // Activate the ability
-            activateRaiserPrimary(event.getPlayer());
+            abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
 
@@ -93,13 +90,16 @@ public class RaiserTrim implements Listener {
      * Primary Ability: Launches the player upward and tags them for a landing effect.
      */
     public void activateRaiserPrimary(Player player) {
+        if (!configManager.isTrimEnabled("raiser")) {
+            return;
+        }
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.RAISER) ||
                 cooldownManager.isOnCooldown(player, TrimPattern.RAISER)) {
             return;
         }
 
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
-            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
 
@@ -109,7 +109,7 @@ public class RaiserTrim implements Listener {
         // Launch the player upward
         player.setVelocity(new Vector(0, PLAYER_UPWARD_BOOST, 0));
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.0f);
-        player.sendMessage(ChatColor.GOLD + "Raiser's Surge activated!");
+        Messaging.sendTrimMessage(player, "Raiser", ChatColor.GOLD, "Raiser's Surge activated!");
 
         // Tag the player as awaiting their landing
         awaitingLanding.add(player.getUniqueId());
@@ -162,7 +162,7 @@ public class RaiserTrim implements Listener {
 
             if (target instanceof Player targetPlayer) {
                 targetPlayer.setCooldown(Material.ENDER_PEARL, PEARL_COOLDOWN_TICKS);
-                targetPlayer.sendMessage(ChatColor.DARK_PURPLE + "Raiser's Surge disrupted your teleportation!");
+                Messaging.sendTrimMessage(targetPlayer, "Raiser", ChatColor.DARK_PURPLE, "Raiser's Surge disrupted your teleportation!");
             }
         }
     }

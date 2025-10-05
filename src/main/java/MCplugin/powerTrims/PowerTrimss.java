@@ -22,21 +22,19 @@ package MCplugin.powerTrims;
 import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.Trims.*;
 import MCplugin.powerTrims.commands.PowerTrimsCommand;
-import MCplugin.powerTrims.commands.ResetCooldownsCommand;
 import MCplugin.powerTrims.integrations.PlaceholderIntegration;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
-//import MCplugin.powerTrims.ultimates.SilenceUlt; coming soon
 import com.jeff_media.armorequipevent.ArmorEquipEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.Objects;
 
@@ -47,13 +45,13 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
     private PersistentTrustManager trustManager;
     private ConfigManager configManager;
     private TrimEffectManager trimEffectManager;
+    private AbilityManager abilityManager;
+    private ConfigWebServer webServer;
 
 
     @Override
     public void onLoad() {
         // Register WorldGuard flags as early as possible.
-        // This is safe because the flag registry is available during the onLoad phase,
-        // before other plugins are fully enabled.
         if (getServer().getPluginManager().getPlugin("WorldGuard") != null) {
             getLogger().info("WorldGuard detected. Registering custom PowerTrims flags...");
             WorldGuardIntegration.registerFlags();
@@ -63,6 +61,8 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
+        // Setup configuration defaults
+        setConfigDefaults();
         saveDefaultConfig();
 
         // Initialize managers
@@ -70,16 +70,18 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         trustManager = new PersistentTrustManager(this);
         dataManager = new DataManager(this);
         cooldownManager = new TrimCooldownManager(this);
+        abilityManager = new AbilityManager();
+        new DoubleSneakManager(this, abilityManager);
 
         if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
             new PlaceholderIntegration(this).register();
         }
 
-        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null) {
-            WorldGuardIntegration.registerFlags();
-        }
+        // Start the web server
+        webServer = new ConfigWebServer(this);
+        webServer.start();
 
-        // Register trim abilities first to use below
+        // Register all abilities and their events
         registerTrimAbilities();
 
         // Register core events
@@ -87,101 +89,184 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         this.trimEffectManager = new TrimEffectManager(this, configManager);
         getServer().getPluginManager().registerEvents(this, this);
         getServer().getPluginManager().registerEvents(new LoreChanger(), this);
-        //getServer().getPluginManager().registerEvents(new SilenceUlt(this), this);
 
         // Register commands
-        Objects.requireNonNull(getCommand("trust")).setExecutor(this);
-        Objects.requireNonNull(getCommand("untrust")).setExecutor(this);
-        Objects.requireNonNull(getCommand("resettrimcooldowns")).setExecutor(new ResetCooldownsCommand(this));
-        Objects.requireNonNull(getCommand("powertrims")).setExecutor(new PowerTrimsCommand(configManager));
+        Objects.requireNonNull(getCommand("powertrims")).setExecutor(new PowerTrimsCommand(this, configManager, cooldownManager, trustManager));
 
         // Stylish startup message
         getLogger().info(ChatColor.GREEN + "--------------------------------------");
         getLogger().info(ChatColor.GOLD + "   Thanks for using PowerTrims!");
         getLogger().info(ChatColor.AQUA + "   Made by " + ChatColor.BOLD + "div");
         getLogger().info(ChatColor.GREEN + "--------------------------------------");
+    }
 
-        // Start the repeating task to check armor effects
-        new BukkitRunnable() {
-            @Override
-            public void run() {
-                if (Bukkit.getOnlinePlayers().isEmpty()) {
-                    return;
-                }
-                for (Player player : Bukkit.getOnlinePlayers()) {
-                    trimEffectManager.applyTrimEffects(player);
-                }
-            }
-        }.runTaskTimer(this, 0L, 20L); // Run every second
+    public void reloadPlugin() {
+        // Unregister all listeners from the trim classes to prevent duplicates
+        HandlerList.unregisterAll((Plugin) this);
+
+        // Reload the config from disk
+        configManager.reloadConfig();
+
+        // Re-register all abilities, which will make them use the new config values
+        registerTrimAbilities();
+
+        // Re-register other listeners
+        ArmorEquipEvent.registerListener(this);
+        this.trimEffectManager = new TrimEffectManager(this, configManager);
+        getServer().getPluginManager().registerEvents(this, this);
+        getServer().getPluginManager().registerEvents(new LoreChanger(), this);
     }
 
 
     private void registerTrimAbilities() {
-        getServer().getPluginManager().registerEvents(new SilenceTrim(this, cooldownManager, trustManager, configManager), this);
-        getServer().getPluginManager().registerEvents(new WildTrim(this, cooldownManager, trustManager, configManager), this);
-        getServer().getPluginManager().registerEvents(new VexTrim(this, cooldownManager, trustManager, configManager), this);
-        getServer().getPluginManager().registerEvents(new TideTrim(this, cooldownManager, trustManager, configManager), this);
-        getServer().getPluginManager().registerEvents(new EyeTrim(this, cooldownManager, trustManager, configManager), this);
-        getServer().getPluginManager().registerEvents(new RibTrim(this, cooldownManager, trustManager, configManager), this);
-        getServer().getPluginManager().registerEvents(new FlowTrim(this, cooldownManager, configManager), this);
-        getServer().getPluginManager().registerEvents(new CoastTrim(this, cooldownManager, trustManager, configManager), this);
-        getServer().getPluginManager().registerEvents(new DuneTrim(this, cooldownManager, trustManager, configManager), this);
-        getServer().getPluginManager().registerEvents(new SentryTrim(this, cooldownManager, trustManager, configManager), this);
-        getServer().getPluginManager().registerEvents(new WayfinderTrim(this, cooldownManager, configManager), this);
-        getServer().getPluginManager().registerEvents(new RaiserTrim(this, cooldownManager, trustManager, configManager), this);
-        getServer().getPluginManager().registerEvents(new WardTrim(this, cooldownManager, trustManager, configManager), this);
-        getServer().getPluginManager().registerEvents(new SpireTrim(this, cooldownManager, trustManager, configManager), this);
-        getServer().getPluginManager().registerEvents(new HostTrim(this, cooldownManager, trustManager, configManager), this);
-        getServer().getPluginManager().registerEvents(new SnoutTrim(this,cooldownManager, trustManager, configManager), this);
+        getServer().getPluginManager().registerEvents(new SilenceTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new WildTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new VexTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new TideTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new EyeTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new RibTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new FlowTrim(this, cooldownManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new CoastTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new DuneTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new SentryTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new WayfinderTrim(this, cooldownManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new RaiserTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new WardTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new SpireTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new HostTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new SnoutTrim(this,cooldownManager, trustManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new BoltTrim(this, cooldownManager, trustManager, configManager), this);
     }
 
-    //trust command
+    private void setConfigDefaults() {
+        FileConfiguration config = getConfig();
+        // Silence Trim
+        config.addDefault("silence.passive.cooldown", 120000L);
+        config.addDefault("silence.primary.radius", 15.0);
+        config.addDefault("silence.primary.potion_duration_ticks", 400);
+        config.addDefault("silence.primary.pearl_cooldown_ticks", 200);
+        config.addDefault("silence.passive.echo_radius", 6.0);
+        config.addDefault("silence.passive.effect_duration_ticks", 300);
+        config.addDefault("silence.primary.max_affected_entities", 30);
+        config.addDefault("silence.primary.cooldown", 90000L);
 
-    @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (sender instanceof Player) {
-            Player player = (Player) sender;
+        // Wild Trim
+        config.addDefault("wild.passive.trigger_health", 8);
+        config.addDefault("wild.passive.cooldown_seconds", 20);
+        config.addDefault("wild.primary.cooldown", 20000L);
+        config.addDefault("wild.primary.grapple_range", 60.0);
+        config.addDefault("wild.primary.poison_duration_ticks", 200);
+        config.addDefault("wild.primary.grapple_speed", 1.8);
+        config.addDefault("wild.passive.root_trap_radius_xz", 5);
+        config.addDefault("wild.passive.root_trap_radius_y", 3);
+        config.addDefault("wild.passive.root_trap_duration_ticks", 200);
 
-            if (command.getName().equalsIgnoreCase("trust")) {
-                if (args.length == 1) {
-                    String targetName = args[0];
-                    Player targetPlayer = Bukkit.getPlayer(targetName);
-                    if (targetPlayer != null) {
-                        trustManager.trustPlayer(player.getUniqueId(), targetPlayer.getUniqueId(), sender);
-                    } else {
-                        sender.sendMessage(ChatColor.RED + "Player not found.");
-                    }
-                } else {
-                    return false; // Invalid number of arguments
-                }
-                return true;
+        // Vex Trim
+        config.addDefault("vex.primary.cooldown", 120000L);
+        config.addDefault("vex.primary.radius", 30.0);
+        config.addDefault("vex.primary.damage", 8.0);
+        config.addDefault("vex.primary.debuff_duration_ticks", 400);
+        config.addDefault("vex.primary.blindness_duration_ticks", 100);
+        config.addDefault("vex.passive.cooldown", 120000L);
+        config.addDefault("vex.passive.hide_duration_ticks", 200L);
+        config.addDefault("vex.passive.health_threshold", 8.0);
 
-            } else if (command.getName().equalsIgnoreCase("untrust")) {
-                if (args.length == 1) {
-                    String targetName = args[0];
-                    Player targetPlayer = Bukkit.getPlayer(targetName);
-                    if (targetPlayer != null) {
-                        trustManager.untrustPlayer(player.getUniqueId(), targetPlayer.getUniqueId(), sender);
-                    } else {
-                        sender.sendMessage(ChatColor.RED + "Player not found.");
-                    }
-                } else {
-                    return false; // Invalid number of arguments
-                }
-                return true;
+        // Tide Trim
+        config.addDefault("tide.primary.cooldown", 120000L);
+        config.addDefault("tide.primary.wave_width", 3.0);
+        config.addDefault("tide.primary.effect_duration_ticks", 300);
+        config.addDefault("tide.primary.knockback_strength", 1.8);
+        config.addDefault("tide.primary.wall_height", 6);
+        config.addDefault("tide.primary.move_delay_ticks", 2);
+        config.addDefault("tide.primary.max_moves", 20);
 
-            } else if (command.getName().equalsIgnoreCase("trustlist")) {
-                trustManager.showTrustList(player.getUniqueId(), sender);
-                return true;
-            }
-        } else {
-            sender.sendMessage(ChatColor.RED + "This command can only be used by players.");
-        }
-        return true;
+        // Eye Trim
+        config.addDefault("eye.primary.true_sight_radius", 80.0);
+        config.addDefault("eye.primary.true_sight_duration_ticks", 600);
+        config.addDefault("trim.eye.primary.cooldown", 120000L);
+        config.addDefault("eye.primary.task_interval_ticks", 20L);
+        config.addDefault("eye.primary.true_sight_vertical_radius", 50.0);
+
+        // Rib Trim
+        config.addDefault("rib.primary.cooldown", 60000L);
+        config.addDefault("rib.primary.minion_lifespan_ticks", 1200L);
+
+        // Flow Trim
+        config.addDefault("flow.primary.heart_cost_interval", 20);
+        config.addDefault("flow.primary.heart_cost_amount", 2.0);
+        config.addDefault("flow.primary.cooldown", 60000L);
+        config.addDefault("flow.primary.duration", 400);
+
+        // Coast Trim
+        config.addDefault("coast.primary.water-burst-radius", 30);
+        config.addDefault("coast.primary.water-burst-damage", 10);
+        config.addDefault("coast.primary.water-burst-cooldown", 60000L);
+        config.addDefault("coast.primary.pull-duration-ticks", 60);
+        config.addDefault("coast.primary.debuff-duration-ticks", 80);
+        config.addDefault("coast.primary.buff-duration-ticks", 100);
+        config.addDefault("coast.primary.weakness-amplifier", 1);
+        config.addDefault("coast.primary.slowness-amplifier", 1);
+        config.addDefault("coast.primary.speed-amplifier", 1);
+        config.addDefault("coast.primary.resistance-amplifier", 0);
+
+        // Dune Trim
+        config.addDefault("dune.primary.sandstorm_radius", 12);
+        config.addDefault("dune.primary.sandstorm_damage", 10);
+        config.addDefault("dune.primary.cooldown", 60000L);
+
+        // Sentry Trim
+        config.addDefault("sentry.primary.arrow_count", 3);
+        config.addDefault("sentry.primary.spread", 0.15);
+        config.addDefault("sentry.primary.cooldown", 90000L);
+        config.addDefault("sentry.primary.true_damage", 0.5);
+
+        // Wayfinder Trim
+        config.addDefault("wayfinder.primary.cooldown", 120000L);
+        config.addDefault("wayfinder.primary.enabled", true);
+
+        // Raiser Trim
+        config.addDefault("raiser.primary.cooldown", 120000L);
+        config.addDefault("raiser.primary.entity_pull_radius", 15.0);
+        config.addDefault("raiser.primary.player_upward_boost", 1.5);
+        config.addDefault("raiser.primary.pearl_cooldown_ticks", 200);
+
+        // Ward Trim
+        config.addDefault("ward.primary.barrier_duration", 200);
+        config.addDefault("ward.primary.absorption_level", 4);
+        config.addDefault("ward.primary.resistance_boost_level", 2);
+        config.addDefault("ward.primary.cooldown", 120000L);
+
+        // Spire Trim
+        config.addDefault("spire.primary.dash_distance", 8);
+        config.addDefault("spire.primary.dash_speed", 2.0);
+        config.addDefault("spire.primary.knockback_strength", 1.5);
+        config.addDefault("spire.primary.slow_duration", 60);
+        config.addDefault("spire.primary.vulnerable_duration", 100);
+        config.addDefault("spire.primary.damage_amplification", 0.6);
+        config.addDefault("spire.primary.cooldown", 30000L);
+
+        // Host Trim
+        config.addDefault("host.primary.cooldown", 120000L);
+        config.addDefault("host.primary.effect_steal_radius", 10.0);
+        config.addDefault("host.primary.health_steal_amount", 4.0);
+        config.addDefault("host.primary.particle_density", 4.0);
+
+        // Snout Trim
+        config.addDefault("snout.primary.cooldown", 120000L);
+        config.addDefault("snout.primary.minion_lifespan_ticks", 1800L);
+
+        // Bolt Trim
+        config.addDefault("bolt.primary.cooldown", 20000L);
+        config.addDefault("bolt.primary.chain_range", 10);
+        config.addDefault("bolt.primary.max_chains", 3);
+        config.addDefault("bolt.primary.initial_damage", 6.0);
+        config.addDefault("bolt.primary.subsequent_damage", 4.0);
+        config.addDefault("bolt.primary.target_range", 20);
+        config.addDefault("bolt.primary.weakness_duration", 100);
+        config.addDefault("bolt.primary.weakness_amplifier", 0);
+
+        config.options().copyDefaults(true);
     }
-
-
-
 
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
@@ -192,6 +277,11 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
     @Override
     public void onDisable() {
+        // Stop the web server
+        if (webServer != null) {
+            webServer.stop();
+        }
+
         // Clear scoreboards for all online players to prevent them from getting stuck.
         if (cooldownManager != null) {
             for (Player player : Bukkit.getOnlinePlayers()) {
