@@ -3,162 +3,200 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PowerTrims Configuration</title>
+    <title>PowerTrims Configuration Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary-color: #007bff;
-            --primary-hover: #0056b3;
-            --background-color: #f0f2f5;
-            --container-bg: #ffffff;
-            --text-color: #333;
-            --label-color: #606770;
-            --border-color: #dddfe2;
-            --section-header-bg: #f5f6f7;
+            --background-color: #1a1a2e;
+            --container-color: #16213e;
+            --primary-color: #0f3460;
+            --secondary-color: #e94560;
+            --font-color: #e0e0e0;
+            --border-color: rgba(255, 255, 255, 0.1);
         }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            margin: 0;
-            padding: 2em;
+
+        body {
+            font-family: 'Poppins', sans-serif;
             background-color: var(--background-color);
-            color: var(--text-color);
-        }
-        h1 { 
-            color: var(--primary-color);
-            text-align: center;
-            margin-bottom: 1.5em;
-        }
-        .container { 
-            background-color: var(--container-bg);
-            padding: 2em;
-            border-radius: 8px;
-            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
-            max-width: 900px;
-            margin: 0 auto;
-        }
-        .section {
-            margin-bottom: 1.5em;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        .section-title {
-            cursor: pointer;
-            background-color: var(--section-header-bg);
-            color: #4b4f56;
-            padding: 15px 20px;
+            color: var(--font-color);
+            display: block;
+            padding: 2rem 1rem;
             margin: 0;
-            font-size: 1.1em;
+        }
+
+        .config-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: var(--container-color);
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .title-container h1 {
+            text-align: center;
+            color: var(--secondary-color);
             font-weight: 600;
+            margin-bottom: 2rem;
+            text-shadow: 0 0 10px var(--secondary-color);
+        }
+
+        .grid-container {
+            display: none;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            padding-top: 1.5rem;
+        }
+
+        .grid-container.open {
+            display: grid;
+        }
+
+        .trim-section {
+            background-color: var(--primary-color);
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .trim-title {
+            cursor: pointer;
             user-select: none;
+            padding: 1rem 1.5rem;
+            font-weight: 500;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            background-color: rgba(255,255,255,0.05);
         }
-        .section-title:hover { background-color: #e9ebee; }
-        .section-title::after {
+
+        .trim-title::after {
             content: '▼';
-            font-size: 0.8em;
-            transition: transform 0.2s;
+            font-size: 1em;
+            transition: transform 0.3s ease;
         }
-        .section-title.open::after {
+
+        .trim-title.open::after {
             transform: rotate(180deg);
         }
-        .content {
-            display: none;
-            padding: 20px;
-            border-top: 1px solid var(--border-color);
-            background-color: #fafafa;
+        
+        .grid-container {
+            padding: 1.5rem;
         }
-        .content.open { display: block; }
-        .form-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 20px;
-        }
-        .form-group {
+
+        .config-item {
             display: flex;
             flex-direction: column;
         }
-        label {
-            margin-bottom: 8px;
-            font-weight: 600;
-            color: var(--label-color);
-            font-size: 0.9em;
+
+        .config-item label {
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            text-transform: capitalize;
         }
-        input[type="text"], input[type="number"], select {
+
+        .config-item select, .config-item input {
             width: 100%;
-            padding: 10px;
-            border: 1px solid #ccd0d5;
-            border-radius: 6px;
-            box-sizing: border-box;
-            font-size: 1em;
+            padding: 0.8rem;
+            border: 1px solid var(--border-color);
+            background: #1a1a2e;
+            border-radius: 5px;
+            color: var(--font-color);
+            font-family: 'Poppins', sans-serif;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
         }
-        .save-btn {
-            background-color: var(--primary-color);
-            color: white;
-            padding: 14px 20px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 1.1em;
-            font-weight: 600;
+
+        .config-item select:focus, .config-item input:focus {
+            outline: none;
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 8px var(--secondary-color);
+        }
+
+        #save-button {
             display: block;
             width: 100%;
-            margin-top: 1.5em;
-            transition: background-color 0.2s;
+            padding: 1rem;
+            background-color: var(--secondary-color);
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            margin-top: 2rem;
         }
-        .save-btn:hover { background-color: var(--primary-hover); }
+
+        #save-button:hover {
+            background-color: #ff637d;
+            transform: translateY(-2px);
+        }
+
+        .instructions {
+            text-align: center;
+            margin-top: 2rem;
+            color: #ccc;
+            font-size: 0.9rem;
+            background-color: var(--primary-color);
+            padding: 1rem;
+            border-radius: 8px;
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>PowerTrims Configuration</h1>
+<div class="config-container">
+    <div class="title-container">
+        <h1>PowerTrims Configuration Generator</h1>
+    </div>
     <form id="config-form"></form>
-    <button class="save-btn" onclick="saveConfig()">Save & Reload Configuration</button>
+    <button id="save-button" onclick="generateConfig()">Generate & Download Config</button>
+    <div class="instructions">
+        <p>After downloading, upload the `config.yml` file to your server's `plugins/PowerTrims/` folder, replacing the old one. Then, restart your server or run `/powertrims reload`.</p>
+    </div>
 </div>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         fetch('/api/config')
-            .then(response => response.ok ? response.json() : Promise.reject('Failed to load config'))
+            .then(response => {
+                if (!response.ok) {
+                    return Promise.reject('Failed to load config from server');
+                }
+                return response.json();
+            })
             .then(data => {
                 const form = document.getElementById('config-form');
                 buildForm(data, form);
             })
             .catch(error => {
                 const form = document.getElementById('config-form');
-                form.innerHTML = `<p style="color: red; text-align: center;">Error loading configuration: ${error}. Please check the server console.</p>`;
+                form.innerHTML = `<p style="color: #ff4d4d; text-align: center;">Error: ${error}. Please check the server console.</p>`;
             });
     });
 
     function buildForm(data, parentElement) {
-        const knownNonTrims = ['trims', 'cooldown-display'];
+        const knownNonTrims = ['trims', 'cooldown-display', 'web-password', 'web-address', 'web-port'];
 
-        // --- Global & Toggles Sections (Always Open) ---
-        const globalSection = createSection(parentElement, 'Global Settings', true);
-        const globalGrid = document.createElement('div');
-        globalGrid.className = 'form-grid';
-        globalSection.appendChild(globalGrid);
-        createFormField(globalGrid, 'cooldown-display', data['cooldown-display']);
+        const globalGrid = createSection(parentElement, 'Global Settings', true);
+        if (data['cooldown-display'] !== undefined) {
+             createFormField(globalGrid, 'cooldown-display', data['cooldown-display']);
+        }
 
-        const trimsSection = createSection(parentElement, 'Trim Toggles', true);
-        const trimsGrid = document.createElement('div');
-        trimsGrid.className = 'form-grid';
-        trimsSection.appendChild(trimsGrid);
+        const trimsGrid = createSection(parentElement, 'Trim Toggles', true);
         if (data.trims && typeof data.trims === 'object') {
             for (const key in data.trims) {
                 createFormField(trimsGrid, 'trims.' + key, data.trims[key]);
             }
         }
 
-        // --- Detailed Trim Settings (Collapsible) ---
         for (const trimName in data) {
             if (typeof data[trimName] === 'object' && data[trimName] !== null && !knownNonTrims.includes(trimName)) {
-                const sectionContent = createSection(parentElement, `${trimName.charAt(0).toUpperCase() + trimName.slice(1)} Settings`);
-                const grid = document.createElement('div');
-                grid.className = 'form-grid';
-                sectionContent.appendChild(grid);
+                const grid = createSection(parentElement, `${trimName.charAt(0).toUpperCase() + trimName.slice(1)} Settings`);
                 buildNestedForm(data[trimName], trimName, grid);
             }
         }
@@ -178,34 +216,39 @@
 
     function createSection(parentElement, title, isOpen = false) {
         const sectionDiv = document.createElement('div');
-        sectionDiv.className = 'section';
-        const h2 = document.createElement('h2');
-        h2.className = 'section-title';
+        sectionDiv.className = 'trim-section';
+
+        const h2 = document.createElement('div');
+        h2.className = 'trim-title';
         h2.textContent = title;
         sectionDiv.appendChild(h2);
+
         const contentDiv = document.createElement('div');
-        contentDiv.className = 'content';
+        contentDiv.className = 'grid-container';
         sectionDiv.appendChild(contentDiv);
+
         parentElement.appendChild(sectionDiv);
 
         if (isOpen) {
             contentDiv.classList.add('open');
             h2.classList.add('open');
-        } else {
-             h2.addEventListener('click', () => {
-                contentDiv.classList.toggle('open');
-                h2.classList.toggle('open');
-            });
         }
+        
+        h2.addEventListener('click', () => {
+            contentDiv.classList.toggle('open');
+            h2.classList.toggle('open');
+        });
+        
         return contentDiv;
     }
 
     function createFormField(parentElement, key, value) {
         const group = document.createElement('div');
-        group.className = 'form-group';
+        group.className = 'config-item';
+        
         const label = document.createElement('label');
         label.setAttribute('for', key);
-        label.textContent = key.replace(/_/g, ' ');
+        label.textContent = key.split('.').pop().replace(/_/g, ' ');
         group.appendChild(label);
 
         let input;
@@ -233,7 +276,30 @@
         parentElement.appendChild(group);
     }
 
-    function saveConfig() {
+    function objectToYaml(data, indent = '') {
+        let yamlString = '';
+        for (const key in data) {
+            if (Object.prototype.hasOwnProperty.call(data, key)) {
+                const value = data[key];
+                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                    yamlString += `${indent}${key}:\n`;
+                    yamlString += objectToYaml(value, indent + '  ');
+                } else {
+                    let formattedValue = value;
+                    if (typeof value === 'string') {
+                        // Simple check if quoting is needed. This is not a full YAML parser.
+                        if (value.includes(':') || value.includes('#') || /^[0-9]/.test(value)) {
+                             formattedValue = `"${value.replace(/"/g, '\\"')}"`;
+                        }
+                    }
+                    yamlString += `${indent}${key}: ${formattedValue}\n`;
+                }
+            }
+        }
+        return yamlString;
+    }
+
+    function generateConfig() {
         const form = document.getElementById('config-form');
         const inputs = form.querySelectorAll('input, select');
         const config = {};
@@ -256,19 +322,30 @@
             });
         });
 
-        fetch('/api/config', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(config),
-        })
-        .then(response => {
-            if(response.ok) {
-                alert('Configuration saved successfully! The plugin has been reloaded.');
-            } else {
-                response.text().then(text => alert(`Error saving configuration: ${text}`));
-            }
-        })
-        .catch(error => alert(`Network error: ${error}`));
+        // Re-fetch original config to preserve web settings
+        fetch('/api/config')
+            .then(response => response.json())
+            .then(originalConfig => {
+                config['web-address'] = originalConfig['web-address'];
+                config['web-port'] = originalConfig['web-port'];
+                config['web-password'] = originalConfig['web-password'];
+
+                let yamlOutput = "# POWER-TRIMS Configuration - Generated by the web panel\n";
+                yamlOutput += "# Upload this file to your server at plugins/PowerTrims/config.yml\n\n";
+                yamlOutput += objectToYaml(config);
+
+                const blob = new Blob([yamlOutput], { type: 'application/x-yaml' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'config.yml';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                alert('Your new config.yml has been downloaded!');
+            });
     }
 </script>
 

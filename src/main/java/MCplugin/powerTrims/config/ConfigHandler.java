@@ -1,4 +1,4 @@
-package MCplugin.powerTrims.Logic;
+package MCplugin.powerTrims.config;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;

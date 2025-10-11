@@ -1,4 +1,4 @@
-package MCplugin.powerTrims.Logic;
+package MCplugin.powerTrims.config;
 
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;

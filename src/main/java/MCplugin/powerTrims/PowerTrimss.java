@@ -21,12 +21,19 @@ package MCplugin.powerTrims;
 
 import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.Trims.*;
+import MCplugin.powerTrims.UltimateUpgrader.RitualManager;
+import MCplugin.powerTrims.UltimateUpgrader.UltimateUpgraderManager;
 import MCplugin.powerTrims.commands.PowerTrimsCommand;
+import MCplugin.powerTrims.config.ConfigManager;
+import MCplugin.powerTrims.config.ConfigWebServer;
 import MCplugin.powerTrims.integrations.PlaceholderIntegration;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
+import MCplugin.powerTrims.integrations.geyser.DoubleSneakManager;
+import MCplugin.powerTrims.ultimates.silenceult.SilenceUlt;
 import com.jeff_media.armorequipevent.ArmorEquipEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -47,6 +54,9 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
     private TrimEffectManager trimEffectManager;
     private AbilityManager abilityManager;
     private ConfigWebServer webServer;
+    private RitualManager ritualManager;
+    private UltimateUpgraderManager ultimateUpgraderManager;
+    private NamespacedKey upgradeKey;
 
 
     @Override
@@ -61,9 +71,11 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        // Setup configuration defaults
-        setConfigDefaults();
-        saveDefaultConfig();
+        // Setup configuration defaults and update existing files
+        saveDefaultConfig(); // Ensures config.yml exists with defaults on first run.
+        setConfigDefaults(); // Defines all default values for the configuration.
+        getConfig().options().copyDefaults(true); // This is the key part for updating.
+        saveConfig();      // Saves the file, adding any missing default values.
 
         // Initialize managers
         configManager = new ConfigManager(this);
@@ -72,6 +84,10 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         cooldownManager = new TrimCooldownManager(this);
         abilityManager = new AbilityManager();
         new DoubleSneakManager(this, abilityManager);
+
+        this.upgradeKey = new NamespacedKey(this, "silence_ultimate_upgraded");
+        this.ritualManager = new RitualManager(this, upgradeKey);
+        this.ultimateUpgraderManager = new UltimateUpgraderManager(this, ritualManager, upgradeKey);
 
         if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
             new PlaceholderIntegration(this).register();
@@ -120,6 +136,7 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
     private void registerTrimAbilities() {
         getServer().getPluginManager().registerEvents(new SilenceTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new SilenceUlt(this, upgradeKey), this);
         getServer().getPluginManager().registerEvents(new WildTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
         getServer().getPluginManager().registerEvents(new VexTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
         getServer().getPluginManager().registerEvents(new TideTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
@@ -140,6 +157,9 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
     private void setConfigDefaults() {
         FileConfiguration config = getConfig();
+        config.addDefault("web-address", "0.0.0.0");
+        config.addDefault("web-port", 8080);
+
         // Silence Trim
         config.addDefault("silence.passive.cooldown", 120000L);
         config.addDefault("silence.primary.radius", 15.0);
@@ -264,8 +284,6 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         config.addDefault("bolt.primary.target_range", 20);
         config.addDefault("bolt.primary.weakness_duration", 100);
         config.addDefault("bolt.primary.weakness_amplifier", 0);
-
-        config.options().copyDefaults(true);
     }
 
     @EventHandler
@@ -311,5 +329,9 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
     public TrimCooldownManager getCooldownManager() {
         return cooldownManager;
+    }
+
+    public NamespacedKey getUpgradeKey() {
+        return upgradeKey;
     }
 }

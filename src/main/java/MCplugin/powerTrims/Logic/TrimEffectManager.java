@@ -1,5 +1,6 @@
 package MCplugin.powerTrims.Logic;
 
+import MCplugin.powerTrims.config.ConfigManager;
 import com.jeff_media.armorequipevent.ArmorEquipEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;

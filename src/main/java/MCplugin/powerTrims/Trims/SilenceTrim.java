@@ -22,6 +22,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.*;
+import MCplugin.powerTrims.config.ConfigManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.entity.LivingEntity;

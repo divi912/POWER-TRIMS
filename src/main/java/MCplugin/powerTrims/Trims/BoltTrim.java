@@ -1,7 +1,7 @@
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.ConfigManager;
+import MCplugin.powerTrims.config.ConfigManager;
 import MCplugin.powerTrims.Logic.PersistentTrustManager;
 import MCplugin.powerTrims.Logic.TrimCooldownManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;

@@ -7,6 +7,12 @@
 # To reload the configuration, use the command /powertrims reload, right now using reload command
 # only affects enable and disabling of trims, to change the ability values restart the server
 
+# --- Web Panel Settings ---
+# web-address: The IP address the web panel will run on. Use 0.0.0.0 to allow access from other devices on your network.
+web-address: "0.0.0.0"
+# web-port: The port the web panel will run on.
+web-port: 8080
+
 # Global settings for enabling or disabling entire trim powers.
 trims:
   sentry: true

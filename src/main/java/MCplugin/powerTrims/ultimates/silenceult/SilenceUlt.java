@@ -1,0 +1,291 @@
+package MCplugin.powerTrims.ultimates.silenceult;
+
+import MCplugin.powerTrims.Logic.ArmourChecking;
+import me.libraryaddict.disguise.DisguiseAPI;
+import me.libraryaddict.disguise.DisguiseConfig;
+import me.libraryaddict.disguise.disguisetypes.DisguiseType;
+import me.libraryaddict.disguise.disguisetypes.MobDisguise;
+import net.md_5.bungee.api.ChatMessageType;
+import net.md_5.bungee.api.chat.TextComponent;
+import org.bukkit.*;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.Listener;
+import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.player.PlayerItemHeldEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.inventory.meta.trim.TrimPattern;
+import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
+
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+
+public class SilenceUlt implements Listener {
+
+    private final JavaPlugin plugin;
+    private final SilenceUltData data;
+    private final SilenceUltAnimations animations;
+    private final SilenceUltAttacks attacks;
+    private final NamespacedKey upgradeKey;
+
+    public SilenceUlt(JavaPlugin plugin, NamespacedKey upgradeKey) {
+        this.plugin = plugin;
+        this.data = new SilenceUltData();
+        this.animations = new SilenceUltAnimations(plugin, this, data);
+        this.attacks = new SilenceUltAttacks(plugin, this, data);
+        this.upgradeKey = upgradeKey;
+        Bukkit.getPluginManager().registerEvents(this, plugin);
+        startArmorCheckTask();
+    }
+
+    private void startArmorCheckTask() {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                for (Player player : Bukkit.getOnlinePlayers()) {
+                    // The warden timer runnable handles its own UI updates.
+                    if (data.wardenTimers.containsKey(player.getUniqueId())) continue;
+                    updateActionbar(player);
+                }
+            }
+        }.runTaskTimer(plugin, 0L, 20L); // Update every second
+    }
+
+    // --- Event Handlers ---
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        Player player = event.getPlayer();
+        UUID playerUUID = player.getUniqueId();
+        cleanupPlayer(playerUUID);
+        data.rage.remove(playerUUID);
+        data.wardenBoomCooldowns.remove(playerUUID);
+        data.deepDarkGraspCooldowns.remove(playerUUID);
+        data.obliteratingLeapCooldowns.remove(playerUUID);
+    }
+
+    @EventHandler
+    public void onPlayerDeath(PlayerDeathEvent event) {
+        Player player = event.getEntity();
+        if (DisguiseAPI.isDisguised(player)) {
+            revertFromWarden(player, false);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDamage(EntityDamageByEntityEvent event) {
+        if (event.getEntity() instanceof Player player && ArmourChecking.hasFullUpgradedArmor(player, TrimPattern.SILENCE, upgradeKey)) {
+            addRage(player, SilenceUltData.RAGE_PER_HIT_TAKEN);
+        }
+        if (event.getDamager() instanceof Player player && ArmourChecking.hasFullUpgradedArmor(player, TrimPattern.SILENCE, upgradeKey)) {
+            addRage(player, SilenceUltData.RAGE_PER_HIT_DEALT);
+        }
+    }
+
+    @EventHandler
+    public void onAbilityRelatedDamage(EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+        if (data.transformingPlayers.contains(player.getUniqueId())) {
+            event.setCancelled(true);
+            return;
+        }
+        if (event.getCause() == EntityDamageEvent.DamageCause.FALL && data.leapingPlayers.contains(player.getUniqueId())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onHotbarChange(PlayerItemHeldEvent event) {
+        Player player = event.getPlayer();
+        if (!player.isSneaking() || data.leapingPlayers.contains(player.getUniqueId())) return;
+
+        int newSlot = event.getNewSlot();
+        boolean isWarden = DisguiseAPI.isDisguised(player) && DisguiseAPI.getDisguise(player).getType() == DisguiseType.WARDEN;
+
+        switch (newSlot) {
+            case 0 -> {
+                double currentRage = data.rage.getOrDefault(player.getUniqueId(), 0.0);
+                if (currentRage >= SilenceUltData.MAX_RAGE && !isWarden && !data.transformingPlayers.contains(player.getUniqueId())) {
+                    animations.startTransformationSequence(player);
+                }
+            }
+            case 1 -> { if (isWarden) attacks.tryUseWardenBoom(player); }
+            case 2 -> { if (isWarden) attacks.tryUseDeepDarkGrasp(player); }
+            case 3 -> { if (isWarden) attacks.tryUseObliteratingLeap(player); }
+        }
+    }
+
+    // --- Core Logic Methods ---
+
+    public void addRage(Player player, double amount) {
+        if (DisguiseAPI.isDisguised(player) || data.transformingPlayers.contains(player.getUniqueId())) return;
+        double currentRage = data.rage.getOrDefault(player.getUniqueId(), 0.0);
+        double newRage = Math.min(SilenceUltData.MAX_RAGE, currentRage + amount);
+        data.rage.put(player.getUniqueId(), newRage);
+        updateActionbar(player);
+    }
+
+    public void updateActionbar(Player player) {
+        if (DisguiseAPI.isDisguised(player) || data.transformingPlayers.contains(player.getUniqueId())) {
+            // This is handled by the warden timer task to avoid conflicts
+            return;
+        }
+
+        if (ArmourChecking.hasFullUpgradedArmor(player, TrimPattern.SILENCE, upgradeKey)) {
+            double currentRage = data.rage.getOrDefault(player.getUniqueId(), 0.0);
+            if (currentRage >= SilenceUltData.MAX_RAGE) {
+                player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(
+                        ChatColor.RED + "" + ChatColor.BOLD + "ULTIMATE READY (Sneak + Slot 1)"
+                ));
+            } else {
+                int ragePercent = (int) ((currentRage / SilenceUltData.MAX_RAGE) * 100);
+                player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(
+                        ChatColor.DARK_AQUA + "Silence Ultimate: " + ChatColor.AQUA + ragePercent + "%"
+                ));
+            }
+        } else {
+            // If they don't have the armor, clear their rage and potentially the action bar
+            data.rage.put(player.getUniqueId(), 0.0);
+            // We don't clear the action bar here to avoid overriding other plugins' use of it.
+            // The main timer will just stop sending updates for this player.
+        }
+    }
+
+
+    public void completeWardenTransformation(Player player) {
+        if (!player.isOnline()) return;
+        cleanupPlayer(player.getUniqueId());
+        Location loc = player.getLocation();
+        World world = loc.getWorld();
+
+        UUID playerUUID = player.getUniqueId();
+        data.wardenBoomCooldowns.remove(playerUUID);
+        data.deepDarkGraspCooldowns.remove(playerUUID);
+        data.obliteratingLeapCooldowns.remove(playerUUID);
+
+        world.playSound(loc, Sound.ENTITY_WARDEN_ROAR, 3.0f, 1.0f);
+        world.playSound(loc, Sound.ENTITY_GENERIC_EXPLODE, 2.0f, 0.8f);
+        world.spawnParticle(Particle.SONIC_BOOM, loc.clone().add(0, 1, 0), 1);
+        world.spawnParticle(Particle.EXPLOSION, loc, 5);
+
+        for (Entity entity : world.getNearbyEntities(loc, 10.0, 10.0, 10.0)) {
+            if (entity.equals(player) || !(entity instanceof LivingEntity)) continue;
+            org.bukkit.util.Vector direction = entity.getLocation().toVector().subtract(loc.toVector()).normalize();
+            direction.multiply(1.5).setY(0.5);
+            entity.setVelocity(direction);
+        }
+
+        for (Entity entity : world.getNearbyEntities(loc, 16, 16, 16)) {
+            if (entity instanceof Player nearbyPlayer) {
+                nearbyPlayer.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS, 100, 0));
+            }
+        }
+        player.sendMessage(ChatColor.DARK_PURPLE + "" + ChatColor.BOLD + "You have embraced the deep dark!");
+
+        MobDisguise wardenDisguise = new MobDisguise(DisguiseType.WARDEN);
+        wardenDisguise.setViewSelfDisguise(true);
+        wardenDisguise.setTallSelfDisguise(DisguiseConfig.TallSelfDisguise.HIDDEN);
+        DisguiseAPI.disguiseToAll(player, wardenDisguise);
+
+        long durationTicks = SilenceUltData.WARDEN_DURATION_SECONDS * 20;
+        player.addPotionEffect(new PotionEffect(PotionEffectType.HEALTH_BOOST, (int) durationTicks, SilenceUltData.WARDEN_HEALTH_BOOST_LEVEL, false, false));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, (int) durationTicks, SilenceUltData.WARDEN_STRENGTH_LEVEL, false, false));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, (int) durationTicks, SilenceUltData.WARDEN_RESISTANCE_LEVEL, false, false));
+        startWardenTimer(player);
+    }
+
+    public void revertFromWarden(Player player, boolean sendMessage) {
+        cleanupPlayer(player.getUniqueId());
+        if (sendMessage) {
+            player.sendMessage(ChatColor.GRAY + "The Warden's power recedes...");
+        }
+
+        UUID playerUUID = player.getUniqueId();
+        data.wardenBoomCooldowns.remove(playerUUID);
+        data.deepDarkGraspCooldowns.remove(playerUUID);
+        data.obliteratingLeapCooldowns.remove(playerUUID);
+
+        if (DisguiseAPI.isDisguised(player)) DisguiseAPI.undisguiseToAll(player);
+        player.removePotionEffect(PotionEffectType.STRENGTH);
+        player.removePotionEffect(PotionEffectType.RESISTANCE);
+        player.removePotionEffect(PotionEffectType.HEALTH_BOOST);
+        player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent("")); // Clear action bar
+        updateActionbar(player);
+    }
+
+    // --- Utility, UI & Cleanup Methods ---
+
+    public void startWardenTimer(Player player) {
+        UUID playerUUID = player.getUniqueId();
+        long transformEndTime = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(SilenceUltData.WARDEN_DURATION_SECONDS);
+
+        BukkitTask task = new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (!player.isOnline() || !DisguiseAPI.isDisguised(player)) {
+                    revertFromWarden(player, true); // Ensure cleanup if disguise is lost unexpectedly
+                    this.cancel();
+                    return;
+                }
+
+                long now = System.currentTimeMillis();
+                long durationLeft = transformEndTime - now;
+                if (durationLeft <= 0) {
+                    revertFromWarden(player, true);
+                    this.cancel();
+                    return;
+                }
+
+                // Build the action bar string
+                String durationStr = ChatColor.DARK_PURPLE + "Warden: " + ChatColor.LIGHT_PURPLE + (durationLeft / 1000 + 1) + "s";
+                String boomStr = getCooldownString("A1", SilenceUltData.BOOM_COOLDOWN_SECONDS, data.wardenBoomCooldowns.getOrDefault(playerUUID, 0L), now);
+                String graspStr = getCooldownString("A2", SilenceUltData.GRASP_COOLDOWN_SECONDS, data.deepDarkGraspCooldowns.getOrDefault(playerUUID, 0L), now);
+                String leapStr = getCooldownString("A3", SilenceUltData.LEAP_COOLDOWN_SECONDS, data.obliteratingLeapCooldowns.getOrDefault(playerUUID, 0L), now);
+
+                String actionBar = durationStr + " | " + boomStr + " | " + graspStr + " | " + leapStr;
+                player.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(actionBar));
+            }
+        }.runTaskTimer(plugin, 0L, 5L); // Update 4 times a second for smoother countdowns
+        data.wardenTimers.put(player.getUniqueId(), task);
+    }
+
+    private String getCooldownString(String abilityName, long totalCooldown, long lastUsed, long now) {
+        long cooldownMillis = TimeUnit.SECONDS.toMillis(totalCooldown);
+        long cooldownLeft = lastUsed + cooldownMillis - now;
+        if (cooldownLeft > 0) {
+            return ChatColor.YELLOW + abilityName + ": " + ChatColor.RED + String.format("%.1f", cooldownLeft / 1000.0) + "s";
+        } else {
+            return ChatColor.GREEN + abilityName + ": READY";
+        }
+    }
+
+    public void cleanupPlayer(UUID playerUUID) {
+        animations.revertSculkBlocks(playerUUID);
+        data.originalBlocks.remove(playerUUID);
+        if (data.sculkTasks.containsKey(playerUUID)) data.sculkTasks.remove(playerUUID).cancel();
+        if (data.mainAnimationTasks.containsKey(playerUUID)) data.mainAnimationTasks.remove(playerUUID).cancel();
+
+        if (data.transformingPlayers.remove(playerUUID)) {
+            Player p = Bukkit.getPlayer(playerUUID);
+            if (p != null && data.ENABLE_WEATHER_EFFECT) p.resetPlayerWeather();
+        }
+        if (data.wardenTimers.containsKey(playerUUID)) {
+            data.wardenTimers.remove(playerUUID).cancel();
+            // Also clear the action bar for the player when the timer is cleaned up
+            Player p = Bukkit.getPlayer(playerUUID);
+            if (p != null) {
+                p.spigot().sendMessage(ChatMessageType.ACTION_BAR, new TextComponent(""));
+            }
+        }
+        data.leapingPlayers.remove(playerUUID);
+    }
+}

@@ -1,4 +1,4 @@
-package MCplugin.powerTrims.Logic;
+package MCplugin.powerTrims.config;
 
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
