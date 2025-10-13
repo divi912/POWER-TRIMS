@@ -54,6 +54,7 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
     private TrimEffectManager trimEffectManager;
     private AbilityManager abilityManager;
     private ConfigWebServer webServer;
+    private ArmourChecking armourChecking;
     private RitualManager ritualManager;
     private UltimateUpgraderManager ultimateUpgraderManager;
     private NamespacedKey upgradeKey;
@@ -82,6 +83,7 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         trustManager = new PersistentTrustManager(this);
         dataManager = new DataManager(this);
         cooldownManager = new TrimCooldownManager(this);
+        armourChecking = new ArmourChecking();
         abilityManager = new AbilityManager();
         new DoubleSneakManager(this, abilityManager);
 
@@ -108,7 +110,7 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
         // Register commands
         Objects.requireNonNull(getCommand("powertrims")).setExecutor(new PowerTrimsCommand(this, configManager, cooldownManager, trustManager));
-
+        Objects.requireNonNull(getCommand("usetrimability")).setExecutor(new MacroSupport(this, abilityManager, armourChecking)); 
         // Stylish startup message
         getLogger().info(ChatColor.GREEN + "--------------------------------------");
         getLogger().info(ChatColor.GOLD + "   Thanks for using PowerTrims!");
