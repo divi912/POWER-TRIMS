@@ -23,6 +23,10 @@ commands:
     description: PowerTrims commands.
     usage: /<command> [reload]
     aliases: [pt]
+  usetrimability:
+    description: Activates your Trim Power (CommandKeys / Macro Recommended)
+    usage: /<command>
+    aliases: [utp]
 permissions:
   powertrims.reload:
     description: Allows reloading the PowerTrims config.
