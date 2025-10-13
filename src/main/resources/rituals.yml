@@ -1,0 +1,13 @@
+# Configuration for armor upgrade rituals.
+# Each top-level key should be a valid TrimPattern name (e.g., SILENCE, VEX, WARD).
+
+rituals:
+  SILENCE:
+    # Duration of the ritual in seconds.
+    duration: 10
+    # List of materials required for the ritual, in the format 'MATERIAL_NAME:AMOUNT'.
+    materials:
+      - 'DIAMOND_BLOCK:1'
+      - 'NETHERITE_INGOT:4'
+      - 'ECHO_SHARD:8'
+      - 'SCULK_CATALYST:1'

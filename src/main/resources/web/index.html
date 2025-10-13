@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerTrims Configuration Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --background-color: #1a1a2e;
+            --container-color: #16213e;
+            --primary-color: #0f3460;
+            --secondary-color: #e94560;
+            --font-color: #e0e0e0;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--background-color);
+            color: var(--font-color);
+            display: block;
+            padding: 2rem 1rem;
+            margin: 0;
+        }
+
+        .config-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: var(--container-color);
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .title-container h1 {
+            text-align: center;
+            color: var(--secondary-color);
+            font-weight: 600;
+            margin-bottom: 2rem;
+            text-shadow: 0 0 10px var(--secondary-color);
+        }
+
+        .grid-container {
+            display: none;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            padding-top: 1.5rem;
+        }
+
+        .grid-container.open {
+            display: grid;
+        }
+
+        .trim-section {
+            background-color: var(--primary-color);
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .trim-title {
+            cursor: pointer;
+            user-select: none;
+            padding: 1rem 1.5rem;
+            font-weight: 500;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: rgba(255,255,255,0.05);
+        }
+
+        .trim-title::after {
+            content: '▼';
+            font-size: 1em;
+            transition: transform 0.3s ease;
+        }
+
+        .trim-title.open::after {
+            transform: rotate(180deg);
+        }
+        
+        .grid-container {
+            padding: 1.5rem;
+        }
+
+        .config-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .config-item label {
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            text-transform: capitalize;
+        }
+
+        .config-item select, .config-item input {
+            width: 100%;
+            padding: 0.8rem;
+            border: 1px solid var(--border-color);
+            background: #1a1a2e;
+            border-radius: 5px;
+            color: var(--font-color);
+            font-family: 'Poppins', sans-serif;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .config-item select:focus, .config-item input:focus {
+            outline: none;
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 8px var(--secondary-color);
+        }
+
+        #save-button {
+            display: block;
+            width: 100%;
+            padding: 1rem;
+            background-color: var(--secondary-color);
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            margin-top: 2rem;
+        }
+
+        #save-button:hover {
+            background-color: #ff637d;
+            transform: translateY(-2px);
+        }
+
+        .instructions {
+            text-align: center;
+            margin-top: 2rem;
+            color: #ccc;
+            font-size: 0.9rem;
+            background-color: var(--primary-color);
+            padding: 1rem;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="config-container">
+    <div class="title-container">
+        <h1>PowerTrims Configuration Generator</h1>
+    </div>
+    <form id="config-form"></form>
+    <button id="save-button" onclick="generateConfig()">Generate & Download Config</button>
+    <div class="instructions">
+        <p>After downloading, upload the `config.yml` file to your server's `plugins/PowerTrims/` folder, replacing the old one. Then, restart your server or run `/powertrims reload`.</p>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        fetch('/api/config')
+            .then(response => {
+                if (!response.ok) {
+                    return Promise.reject('Failed to load config from server');
+                }
+                return response.json();
+            })
+            .then(data => {
+                const form = document.getElementById('config-form');
+                buildForm(data, form);
+            })
+            .catch(error => {
+                const form = document.getElementById('config-form');
+                form.innerHTML = `<p style="color: #ff4d4d; text-align: center;">Error: ${error}. Please check the server console.</p>`;
+            });
+    });
+
+    function buildForm(data, parentElement) {
+        const knownNonTrims = ['trims', 'cooldown-display', 'web-password', 'web-address', 'web-port'];
+
+        const globalGrid = createSection(parentElement, 'Global Settings', true);
+        if (data['cooldown-display'] !== undefined) {
+             createFormField(globalGrid, 'cooldown-display', data['cooldown-display']);
+        }
+
+        const trimsGrid = createSection(parentElement, 'Trim Toggles', true);
+        if (data.trims && typeof data.trims === 'object') {
+            for (const key in data.trims) {
+                createFormField(trimsGrid, 'trims.' + key, data.trims[key]);
+            }
+        }
+
+        for (const trimName in data) {
+            if (typeof data[trimName] === 'object' && data[trimName] !== null && !knownNonTrims.includes(trimName)) {
+                const grid = createSection(parentElement, `${trimName.charAt(0).toUpperCase() + trimName.slice(1)} Settings`);
+                buildNestedForm(data[trimName], trimName, grid);
+            }
+        }
+    }
+
+    function buildNestedForm(obj, path, parentElement) {
+        for (const key in obj) {
+            const newPath = `${path}.${key}`;
+            const value = obj[key];
+            if (typeof value === 'object' && value !== null) {
+                buildNestedForm(value, newPath, parentElement);
+            } else {
+                createFormField(parentElement, newPath, value);
+            }
+        }
+    }
+
+    function createSection(parentElement, title, isOpen = false) {
+        const sectionDiv = document.createElement('div');
+        sectionDiv.className = 'trim-section';
+
+        const h2 = document.createElement('div');
+        h2.className = 'trim-title';
+        h2.textContent = title;
+        sectionDiv.appendChild(h2);
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'grid-container';
+        sectionDiv.appendChild(contentDiv);
+
+        parentElement.appendChild(sectionDiv);
+
+        if (isOpen) {
+            contentDiv.classList.add('open');
+            h2.classList.add('open');
+        }
+        
+        h2.addEventListener('click', () => {
+            contentDiv.classList.toggle('open');
+            h2.classList.toggle('open');
+        });
+        
+        return contentDiv;
+    }
+
+    function createFormField(parentElement, key, value) {
+        const group = document.createElement('div');
+        group.className = 'config-item';
+        
+        const label = document.createElement('label');
+        label.setAttribute('for', key);
+        label.textContent = key.split('.').pop().replace(/_/g, ' ');
+        group.appendChild(label);
+
+        let input;
+        if (typeof value === 'boolean') {
+            input = document.createElement('select');
+            ['true', 'false'].forEach(val => {
+                const option = document.createElement('option');
+                option.value = val;
+                option.textContent = val.charAt(0).toUpperCase() + val.slice(1);
+                input.appendChild(option);
+            });
+            input.value = String(value);
+        } else {
+            input = document.createElement('input');
+            input.type = (typeof value === 'number') ? 'number' : 'text';
+            if(input.type === 'number') {
+                input.step = (String(value).includes('.')) ? '0.1' : '1';
+            }
+            input.value = value;
+        }
+        
+        input.name = key;
+        input.id = key;
+        group.appendChild(input);
+        parentElement.appendChild(group);
+    }
+
+    function objectToYaml(data, indent = '') {
+        let yamlString = '';
+        for (const key in data) {
+            if (Object.prototype.hasOwnProperty.call(data, key)) {
+                const value = data[key];
+                if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                    yamlString += `${indent}${key}:\n`;
+                    yamlString += objectToYaml(value, indent + '  ');
+                } else {
+                    let formattedValue = value;
+                    if (typeof value === 'string') {
+                        // Simple check if quoting is needed. This is not a full YAML parser.
+                        if (value.includes(':') || value.includes('#') || /^[0-9]/.test(value)) {
+                             formattedValue = `"${value.replace(/"/g, '\\"')}"`;
+                        }
+                    }
+                    yamlString += `${indent}${key}: ${formattedValue}\n`;
+                }
+            }
+        }
+        return yamlString;
+    }
+
+    function generateConfig() {
+        const form = document.getElementById('config-form');
+        const inputs = form.querySelectorAll('input, select');
+        const config = {};
+        inputs.forEach(input => {
+            const keys = input.name.split('.');
+            let current = config;
+            keys.forEach((key, index) => {
+                if (index === keys.length - 1) {
+                    let value = input.value;
+                    if (input.type === 'number') {
+                        value = Number(value);
+                    } else if (input.tagName.toLowerCase() === 'select') {
+                        value = (value === 'true');
+                    }
+                    current[key] = value;
+                } else {
+                    current[key] = current[key] || {};
+                    current = current[key];
+                }
+            });
+        });
+
+        // Re-fetch original config to preserve web settings
+        fetch('/api/config')
+            .then(response => response.json())
+            .then(originalConfig => {
+                config['web-address'] = originalConfig['web-address'];
+                config['web-port'] = originalConfig['web-port'];
+                config['web-password'] = originalConfig['web-password'];
+
+                let yamlOutput = "# POWER-TRIMS Configuration - Generated by the web panel\n";
+                yamlOutput += "# Upload this file to your server at plugins/PowerTrims/config.yml\n\n";
+                yamlOutput += objectToYaml(config);
+
+                const blob = new Blob([yamlOutput], { type: 'application/x-yaml' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'config.yml';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                alert('Your new config.yml has been downloaded!');
+            });
+    }
+</script>
+
+</body>
+</html>

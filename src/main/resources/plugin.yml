@@ -7,6 +7,9 @@ softdepend: [PlaceholderAPI, WorldGuard, Geyser-Spigot]
 depend: [packetevents]
 
 commands:
+  upgrade:
+    description: Opens the Ultimate Upgrader to empower your trimmed armor.
+    usage: /<command>
   trust:
     description: Trust a player, preventing your abilities from affecting them.
     usage: /<command> <player name>

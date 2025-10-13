@@ -7,6 +7,12 @@
 # To reload the configuration, use the command /powertrims reload, right now using reload command
 # only affects enable and disabling of trims, to change the ability values restart the server
 
+# --- Web Panel Settings ---
+# web-address: The IP address the web panel will run on. Use 0.0.0.0 to allow access from other devices on your network.
+web-address: "0.0.0.0"
+# web-port: The port the web panel will run on.
+web-port: 8080
+
 # Global settings for enabling or disabling entire trim powers.
 trims:
   sentry: true
@@ -25,6 +31,7 @@ trims:
   tide: true
   wayfinder: true
   flow: true
+  bolt: true
 
 cooldown-display: SCOREBOARD  # Options: SCOREBOARD, ACTION_BAR. Default is Scoreboard
 
@@ -146,3 +153,13 @@ flow:
     heart_cost_amount: 2.0
     cooldown: 60000
     duration: 400
+bolt:
+  primary:
+    cooldown: 20000
+    chain_range: 10
+    max_chains: 3
+    initial_damage: 6.0
+    subsequent_damage: 4.0
+    target_range: 20
+    weakness_duration: 100
+    weakness_amplifier: 0

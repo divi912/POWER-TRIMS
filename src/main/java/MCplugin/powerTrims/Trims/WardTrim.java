@@ -20,29 +20,19 @@
 
 package MCplugin.powerTrims.Trims;
 
-import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.ConfigManager;
-import MCplugin.powerTrims.Logic.PersistentTrustManager;
-import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.Logic.*;
+import MCplugin.powerTrims.config.ConfigManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.*;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.util.Vector;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -51,9 +41,10 @@ import java.util.UUID;
 public class WardTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
-    private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
+    private final PersistentTrustManager trustManager;
     private final ConfigManager configManager;
-    private final NamespacedKey effectKey;
+    private final AbilityManager abilityManager;
+
     // --- CONSTANTS ---
     private final int BARRIER_DURATION;
     private final int ABSORPTION_LEVEL;
@@ -61,39 +52,30 @@ public class WardTrim implements Listener {
     private final long WARD_COOLDOWN;
     private final Set<UUID> activeBarriers = new HashSet<>();
 
-    private static final Component PREFIX = Component.text()
-            .append(Component.text("[", NamedTextColor.DARK_GRAY))
-            .append(Component.text("Ward", NamedTextColor.YELLOW))
-            .append(Component.text("]", NamedTextColor.DARK_GRAY))
-            .build();
-
-
-    public WardTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
+    public WardTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
-        this.trustManager = trustManager; // Initialize the Trust Manager
+        this.trustManager = trustManager;
         this.configManager = configManager;
-        this.effectKey = new NamespacedKey(plugin, "ward_trim_effect");
+        this.abilityManager = abilityManager;
 
-        BARRIER_DURATION = configManager.getInt("ward.primary.barrier_duration", 200);
-        ABSORPTION_LEVEL = configManager.getInt("ward.primary.absorption_level", 4);
-        RESISTANCE_BOOST_LEVEL = configManager.getInt("ward.primary.resistance_boost_level", 2);
-        WARD_COOLDOWN = configManager.getLong("ward.primary.cooldown", 120000);
+        BARRIER_DURATION = configManager.getInt("ward.primary.barrier_duration");
+        ABSORPTION_LEVEL = configManager.getInt("ward.primary.absorption_level");
+        RESISTANCE_BOOST_LEVEL = configManager.getInt("ward.primary.resistance_boost_level");
+        WARD_COOLDOWN = configManager.getLong("ward.primary.cooldown");
+
+        abilityManager.registerPrimaryAbility(TrimPattern.WARD, this::WardPrimary);
     }
 
-
-
-
     public void WardPrimary(Player player) {
+        if (!configManager.isTrimEnabled("ward")) {
+            return;
+        }
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
-            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
-        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WARD)) {
-            return;
-        }
-
-        if (cooldownManager.isOnCooldown(player, TrimPattern.WARD)) {
+        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.WARD) || cooldownManager.isOnCooldown(player, TrimPattern.WARD)) {
             return;
         }
 
@@ -108,13 +90,13 @@ public class WardTrim implements Listener {
         player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, BARRIER_DURATION, RESISTANCE_BOOST_LEVEL, true, true, true));
         player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, BARRIER_DURATION, 0, true, true, true));
 
-        // Create barrier particle effect
+        // Create particle effect
         createBarrierEffect(player);
 
         // Add player to active barriers set
         activeBarriers.add(player.getUniqueId());
 
-        // Schedule barrier removal
+        // Schedule removal
         new BukkitRunnable() {
             @Override
             public void run() {
@@ -122,10 +104,7 @@ public class WardTrim implements Listener {
             }
         }.runTaskLater(plugin, BARRIER_DURATION);
 
-        player.sendMessage(Component.text()
-                .append(PREFIX)
-                .append(Component.text(" You have activated your personal Protective Barrier!", NamedTextColor.GOLD))
-                .build());
+        Messaging.sendTrimMessage(player, "Ward", ChatColor.YELLOW, "You have activated your personal Protective Barrier!");
         cooldownManager.setCooldown(player, TrimPattern.WARD, WARD_COOLDOWN);
 
         // Create continuous particle effect around the player
@@ -197,7 +176,7 @@ public class WardTrim implements Listener {
             event.setCancelled(true);
 
             // Activate the ability
-            WardPrimary(event.getPlayer());
+            abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
 }

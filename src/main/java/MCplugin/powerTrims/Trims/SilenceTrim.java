@@ -21,10 +21,8 @@
 
 package MCplugin.powerTrims.Trims;
 
-import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.ConfigManager;
-import MCplugin.powerTrims.Logic.PersistentTrustManager;
-import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.Logic.*;
+import MCplugin.powerTrims.config.ConfigManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.entity.LivingEntity;
@@ -32,7 +30,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -50,6 +47,7 @@ public class SilenceTrim implements Listener {
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
     private final ConfigManager configManager;
+    private final AbilityManager abilityManager;
 
     // --- STATE & CONSTANTS ---
     private final Map<UUID, Long> wardensEchoCooldowns = new HashMap<>();
@@ -63,68 +61,63 @@ public class SilenceTrim implements Listener {
     private final int MAX_AFFECTED_ENTITIES;
     private final long PRIMARY_COOLDOWN;
 
-    public SilenceTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
+    public SilenceTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
         this.configManager = configManager;
+        this.abilityManager = abilityManager;
 
-        WARDENS_ECHO_COOLDOWN_MS = configManager.getLong("silence.passive.cooldown", 120_000L);
-        PRIMARY_RADIUS = configManager.getDouble("silence.primary.radius", 15.0);
-        POTION_DURATION_TICKS = configManager.getInt("silence.primary.potion_duration_ticks", 400);
-        PEARL_COOLDOWN_TICKS = configManager.getInt("silence.primary.pearl_cooldown_ticks", 200);
-        ECHO_RADIUS = configManager.getDouble("silence.passive.echo_radius", 6.0);
-        ECHO_EFFECT_DURATION_TICKS = configManager.getInt("silence.passive.effect_duration_ticks", 300);
-        MAX_AFFECTED_ENTITIES = configManager.getInt("silence.primary.max_affected_entities", 30);
-        PRIMARY_COOLDOWN = configManager.getLong("silence.primary.cooldown", 90000);
+        // Read values from the now-centralized config
+        WARDENS_ECHO_COOLDOWN_MS = configManager.getLong("silence.passive.cooldown");
+        PRIMARY_RADIUS = configManager.getDouble("silence.primary.radius");
+        POTION_DURATION_TICKS = configManager.getInt("silence.primary.potion_duration_ticks");
+        PEARL_COOLDOWN_TICKS = configManager.getInt("silence.primary.pearl_cooldown_ticks");
+        ECHO_RADIUS = configManager.getDouble("silence.passive.echo_radius");
+        ECHO_EFFECT_DURATION_TICKS = configManager.getInt("silence.passive.effect_duration_ticks");
+        MAX_AFFECTED_ENTITIES = configManager.getInt("silence.primary.max_affected_entities");
+        PRIMARY_COOLDOWN = configManager.getLong("silence.primary.cooldown");
 
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
+        abilityManager.registerPrimaryAbility(TrimPattern.SILENCE, this::activateSilencePrimary);
     }
 
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
-        // Check if the player is sneaking when they press the offhand key
-        if (!configManager.isTrimEnabled("silence")) {
-            return;
-        }
         if (event.getPlayer().isSneaking()) {
-            // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);
-
-            // Activate the ability
-            activateSilencePrimary(event.getPlayer());
+            abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
 
     public void activateSilencePrimary(Player player) {
+        if (!configManager.isTrimEnabled("silence")) return;
+
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.SILENCE) ||
                 cooldownManager.isOnCooldown(player, TrimPattern.SILENCE)) {
             return;
         }
 
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
-            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
 
         Location playerLocation = player.getLocation();
 
-        // ✨ VISUAL REDESIGN: An expanding shockwave is more intimidating and performant.
         createWardenShockwave(playerLocation, PRIMARY_RADIUS);
 
         player.getWorld().playSound(playerLocation, Sound.ENTITY_WARDEN_ANGRY, 2.0f, 1.5f);
         player.getWorld().playSound(playerLocation, Sound.ENTITY_WARDEN_HEARTBEAT, 2.0f, 1.5f);
 
         int affectedCount = 0;
-        // OPTIMIZATION: Use getNearbyLivingEntities to avoid checking non-living entities.
         for (LivingEntity target : player.getWorld().getNearbyLivingEntities(playerLocation, PRIMARY_RADIUS)) {
             if (affectedCount >= MAX_AFFECTED_ENTITIES) break;
             if (target.equals(player)) continue;
 
-            // OPTIMIZATION: Combined logic for players and other living entities.
             if (target instanceof Player targetPlayer) {
                 if (trustManager.isTrusted(player.getUniqueId(), targetPlayer.getUniqueId())) {
-                    continue; // Skip trusted players
+                    continue;
                 }
                 targetPlayer.setCooldown(Material.ENDER_PEARL, PEARL_COOLDOWN_TICKS);
                 sendMessages(targetPlayer);
@@ -134,22 +127,19 @@ public class SilenceTrim implements Listener {
             affectedCount++;
         }
 
-        player.sendMessage("§8[§cSilence§8] §7You have unleashed the Warden's Roar!");
+        Messaging.sendTrimMessage(player, "Silence", ChatColor.RED, "You have unleashed the Warden's Roar!");
         cooldownManager.setCooldown(player, TrimPattern.SILENCE, PRIMARY_COOLDOWN);
     }
 
-    // --- Warden's Echo (Passive Ability) ---
     @EventHandler
     public void onPlayerDamage(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player player)) return;
 
-        // Low health check
         double healthAfterDamage = player.getHealth() - event.getFinalDamage();
         if (healthAfterDamage > 8.0) return;
 
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.SILENCE)) return;
 
-        // Cooldown check
         if (wardensEchoCooldowns.getOrDefault(player.getUniqueId(), 0L) > System.currentTimeMillis()) return;
 
         activateWardensEcho(player);
@@ -171,12 +161,10 @@ public class SilenceTrim implements Listener {
 
         player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, ECHO_EFFECT_DURATION_TICKS, 1));
         player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, ECHO_EFFECT_DURATION_TICKS, 1));
-        player.sendMessage("§8[§cSilence§8] §7Your armor has unleashed " + ChatColor.BOLD + "§cWarden's Echo!");
+        Messaging.sendTrimMessage(player, "Silence", ChatColor.RED, "Your armor has unleashed " + ChatColor.BOLD + "Warden's Echo!");
 
         wardensEchoCooldowns.put(player.getUniqueId(), System.currentTimeMillis() + WARDENS_ECHO_COOLDOWN_MS);
     }
-
-    // --- Helper Methods ---
 
     private void applyPrimaryEffects(LivingEntity target) {
         target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, POTION_DURATION_TICKS, 0));
@@ -194,19 +182,15 @@ public class SilenceTrim implements Listener {
         target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, ECHO_EFFECT_DURATION_TICKS, 1));
 
         if (target instanceof Player playerTarget) {
-            playerTarget.sendMessage("§8[§cSilence§8] §7You were hit by " + ChatColor.BOLD + "§cWarden's Echo!");
+            Messaging.sendTrimMessage(playerTarget, "Silence", ChatColor.RED, "You were hit by " + ChatColor.BOLD + "Warden's Echo!");
         }
     }
 
     private void sendMessages(Player targetPlayer) {
-        targetPlayer.sendMessage("§8[§cSilence§8] §7You have been hit with the " + ChatColor.RED + ChatColor.BOLD + "Warden's Roar!");
-        targetPlayer.sendMessage("§8[§cSilence§8] §7Your Ender Pearl is on cooldown!");
+        Messaging.sendTrimMessage(targetPlayer, "Silence", ChatColor.RED, "You have been hit with the " + ChatColor.BOLD + "Warden's Roar!");
+        Messaging.sendTrimMessage(targetPlayer, "Silence", ChatColor.RED, "Your Ender Pearl is on cooldown!");
     }
 
-    /**
-     * VISUAL REDESIGN: Creates an expanding shockwave of particles.
-     * This is more performant and visually dynamic than a static, dense ring.
-     */
     private void createWardenShockwave(Location center, double maxRadius) {
         new BukkitRunnable() {
             double currentRadius = 1.0;
@@ -215,13 +199,11 @@ public class SilenceTrim implements Listener {
             public void run() {
                 if (currentRadius > maxRadius) {
                     this.cancel();
-                    // Final boom at the edge
                     center.getWorld().spawnParticle(Particle.SONIC_BOOM, center.clone().add(0, 1, 0), 1);
                     return;
                 }
 
                 World world = center.getWorld();
-                // Particle density can be lower because the movement creates the visual effect
                 int points = (int) (currentRadius * 8);
 
                 for (int i = 0; i < points; i++) {
@@ -233,16 +215,16 @@ public class SilenceTrim implements Listener {
                     world.spawnParticle(Particle.SCULK_SOUL, particleLoc, 1, 0, 0, 0, 0);
                 }
 
-                currentRadius += 1.0; // Speed of expansion
+                currentRadius += 1.0;
             }
-        }.runTaskTimer(plugin, 0L, 1L); // Run every tick for smooth movement
+        }.runTaskTimer(plugin, 0L, 1L);
     }
 
     private void triggerWardensEchoParticles(Player player) {
         Location loc = player.getLocation();
         World world = loc.getWorld();
 
-        for (int i = 0; i < 360; i += 15) { // Less dense circle is fine for a burst
+        for (int i = 0; i < 360; i += 15) {
             double angle = Math.toRadians(i);
             double x = ECHO_RADIUS * Math.cos(angle);
             double z = ECHO_RADIUS * Math.sin(angle);

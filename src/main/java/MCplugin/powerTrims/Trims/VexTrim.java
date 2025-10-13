@@ -21,11 +21,9 @@
 
 package MCplugin.powerTrims.Trims;
 
-import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.ConfigManager;
-import MCplugin.powerTrims.Logic.PersistentTrustManager;
-import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.Logic.*;
 
+import MCplugin.powerTrims.config.ConfigManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 
@@ -33,10 +31,8 @@ import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -49,6 +45,7 @@ public class VexTrim implements Listener {
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
     private final ConfigManager configManager;
+    private final AbilityManager abilityManager;
     private final Map<UUID, Long> passiveCooldowns = new HashMap<>();
 
     // --- PRIMARY ABILITY CONSTANTS ---
@@ -63,46 +60,48 @@ public class VexTrim implements Listener {
     private final long PASSIVE_HIDE_DURATION_TICKS;
     private final double PASSIVE_HEALTH_THRESHOLD;
 
-    public VexTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
+    public VexTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager; // Initialize the Trust Manager
         this.configManager = configManager;
+        this.abilityManager = abilityManager;
         Bukkit.getPluginManager().registerEvents(this, plugin);
 
 
         // Load Primary Ability values
-        PRIMARY_COOLDOWN = configManager.getLong("vex.primary.cooldown", 120000L);
-        PRIMARY_RADIUS = configManager.getDouble("vex.primary.radius", 30.0);
-        PRIMARY_DAMAGE = configManager.getDouble("vex.primary.damage", 8.0);
-        PRIMARY_DEBUFF_DURATION = configManager.getInt("vex.primary.debuff_duration_ticks", 400);
-        PRIMARY_BLINDNESS_DURATION = configManager.getInt("vex.primary.blindness_duration_ticks", 100);
+        PRIMARY_COOLDOWN = configManager.getLong("vex.primary.cooldown");
+        PRIMARY_RADIUS = configManager.getDouble("vex.primary.radius");
+        PRIMARY_DAMAGE = configManager.getDouble("vex.primary.damage");
+        PRIMARY_DEBUFF_DURATION = configManager.getInt("vex.primary.debuff_duration_ticks");
+        PRIMARY_BLINDNESS_DURATION = configManager.getInt("vex.primary.blindness_duration_ticks");
 
         // Load Passive Ability values
-        PASSIVE_COOLDOWN = configManager.getLong("vex.passive.cooldown", 120000L);
-        PASSIVE_HIDE_DURATION_TICKS = configManager.getLong("vex.passive.hide_duration_ticks", 200L);
-        PASSIVE_HEALTH_THRESHOLD = configManager.getDouble("vex.passive.health_threshold", 8.0);
+        PASSIVE_COOLDOWN = configManager.getLong("vex.passive.cooldown");
+        PASSIVE_HIDE_DURATION_TICKS = configManager.getLong("vex.passive.hide_duration_ticks");
+        PASSIVE_HEALTH_THRESHOLD = configManager.getDouble("vex.passive.health_threshold");
+
+        abilityManager.registerPrimaryAbility(TrimPattern.VEX, this::VexPrimary);
     }
 
 
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
-        // Check if the player is sneaking when they press the offhand key
-        if (!configManager.isTrimEnabled("vex")) {
-            return;
-        }
         if (event.getPlayer().isSneaking()) {
             // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);
 
             // Activate the ability
-            VexPrimary(event.getPlayer());
+            abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
 
     public void VexPrimary(Player player) {
+        if (!configManager.isTrimEnabled("vex")) {
+            return;
+        }
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
-            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.VEX)) return;
@@ -158,7 +157,7 @@ public class VexTrim implements Listener {
         }.runTaskTimer(plugin, 0L, interval);
 
         cooldownManager.setCooldown(player, TrimPattern.VEX, PRIMARY_COOLDOWN);
-        player.sendMessage("§8[§cVex§8] §7Vex's Vengeance unleashed in a " + (int)radius + "-block radius!");
+        Messaging.sendTrimMessage(player, "Vex", ChatColor.RED, "Vex's Vengeance unleashed in a " + (int)radius + "-block radius!");
     }
 
     @EventHandler
@@ -190,7 +189,7 @@ public class VexTrim implements Listener {
             }
         }
 
-        player.sendMessage(ChatColor.DARK_GRAY + "You have become invisible for " + (PASSIVE_HIDE_DURATION_TICKS / 20) + " seconds!");
+        Messaging.sendTrimMessage(player, "Vex", ChatColor.DARK_GRAY, "You have become invisible for " + (PASSIVE_HIDE_DURATION_TICKS / 20) + " seconds!");
 
         // Reveal the player after 10 seconds
         new BukkitRunnable() {
@@ -199,7 +198,7 @@ public class VexTrim implements Listener {
                 for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
                     onlinePlayer.showPlayer(plugin, player);
                 }
-                player.sendMessage(ChatColor.GREEN + "You are now visible again!");
+                Messaging.sendTrimMessage(player, "Vex", ChatColor.GREEN, "You are now visible again!");
             }
         }.runTaskLater(plugin, PASSIVE_HIDE_DURATION_TICKS);
     }

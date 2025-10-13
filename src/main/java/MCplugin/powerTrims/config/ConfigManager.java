@@ -1,4 +1,4 @@
-package MCplugin.powerTrims.Logic;
+package MCplugin.powerTrims.config;
 
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -16,19 +16,19 @@ public class ConfigManager {
 
     public ConfigManager(JavaPlugin plugin) {
         this.plugin = plugin;
-        loadConfig();
-    }
-
-    public void loadConfig() {
-        plugin.saveDefaultConfig();
-        config = plugin.getConfig();
+        // The config is now loaded and defaults are set in the main class before this is constructed.
+        this.config = plugin.getConfig();
         loadTrimStatus();
     }
 
+    /**
+     * Reloads the configuration from disk.
+     */
     public void reloadConfig() {
         plugin.reloadConfig();
         config = plugin.getConfig();
         loadTrimStatus();
+        plugin.getLogger().info("Configuration reloaded.");
     }
 
     private void loadTrimStatus() {
@@ -47,19 +47,20 @@ public class ConfigManager {
         return trimEnabledStatus.getOrDefault(trimName.toLowerCase(), true);
     }
 
-    public int getInt(String path, int def) {
-        return config.getInt(path, def);
+    // Getters no longer need a default value, as it's handled by the defaults system.
+    public int getInt(String path) {
+        return config.getInt(path);
     }
 
-    public double getDouble(String path, double def) {
-        return config.getDouble(path, def);
+    public double getDouble(String path) {
+        return config.getDouble(path);
     }
 
-    public long getLong(String path, long def) {
-        return config.getLong(path, def);
+    public long getLong(String path) {
+        return config.getLong(path);
     }
 
-    public boolean getBoolean(String path, boolean def) {
-        return config.getBoolean(path, def);
+    public boolean getBoolean(String path) {
+        return config.getBoolean(path);
     }
 }

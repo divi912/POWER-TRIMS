@@ -21,10 +21,8 @@
 
 package MCplugin.powerTrims.Trims;
 
-import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.ConfigManager;
-import MCplugin.powerTrims.Logic.PersistentTrustManager;
-import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.Logic.*;
+import MCplugin.powerTrims.config.ConfigManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.entity.Entity;
@@ -34,10 +32,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
@@ -50,8 +46,7 @@ public class SpireTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
-    private final NamespacedKey effectKey;
-    private final NamespacedKey vulnerableKey;
+    private final AbilityManager abilityManager;
     private final Set<UUID> markedTargets;
     private final Set<UUID> dashingPlayers;
     private final ConfigManager configManager;
@@ -65,30 +60,34 @@ public class SpireTrim implements Listener {
     private final double DAMAGE_AMPLIFICATION;
     private final long ABILITY_COOLDOWN;
 
-    public SpireTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
+    public SpireTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
-        this.trustManager = trustManager; // Initialize the Trust Manager
+        this.trustManager = trustManager;
         this.configManager = configManager;
-        this.effectKey = new NamespacedKey(plugin, "spire_trim_effect");
-        this.vulnerableKey = new NamespacedKey(plugin, "spire_vulnerable_effect");
+        this.abilityManager = abilityManager;
         this.markedTargets = new HashSet<>();
         this.dashingPlayers = new HashSet<>();
 
         // Load values from config
-        DASH_DISTANCE = configManager.getDouble("spire.primary.dash_distance", 8);
-        DASH_SPEED = configManager.getDouble("spire.primary.dash_speed", 2.0);
-        KNOCKBACK_STRENGTH = configManager.getDouble("spire.primary.knockback_strength", 1.5);
-        SLOW_DURATION = configManager.getInt("spire.primary.slow_duration", 60);
-        VULNERABLE_DURATION = configManager.getInt("spire.primary.vulnerable_duration", 100);
-        DAMAGE_AMPLIFICATION = configManager.getDouble("spire.primary.damage_amplification", 0.6);
-        ABILITY_COOLDOWN = configManager.getLong("spire.primary.cooldown", 30000);
+        DASH_DISTANCE = configManager.getDouble("spire.primary.dash_distance");
+        DASH_SPEED = configManager.getDouble("spire.primary.dash_speed");
+        KNOCKBACK_STRENGTH = configManager.getDouble("spire.primary.knockback_strength");
+        SLOW_DURATION = configManager.getInt("spire.primary.slow_duration");
+        VULNERABLE_DURATION = configManager.getInt("spire.primary.vulnerable_duration");
+        DAMAGE_AMPLIFICATION = configManager.getDouble("spire.primary.damage_amplification");
+        ABILITY_COOLDOWN = configManager.getLong("spire.primary.cooldown");
+
+        abilityManager.registerPrimaryAbility(TrimPattern.SPIRE, this::SpirePrimary);
     }
 
 
     public void SpirePrimary(Player player) {
+        if (!configManager.isTrimEnabled("spire")) {
+            return;
+        }
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
-            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.SPIRE)) return;
@@ -161,7 +160,7 @@ public class SpireTrim implements Listener {
                 dashingPlayers.remove(playerId);
                 player.setInvulnerable(false);
                 cooldownManager.setCooldown(player, TrimPattern.SPIRE, ABILITY_COOLDOWN);
-                player.sendMessage(ChatColor.GREEN + "You used " + ChatColor.GOLD + "Spire Dash" + ChatColor.GREEN + "!");
+                Messaging.sendTrimMessage(player, "Spire", ChatColor.GREEN, "You used " + ChatColor.GOLD + "Spire Dash" + ChatColor.GREEN + "!");
                 this.cancel();
             }
         }.runTaskTimer(plugin, 0L, 1L);
@@ -229,7 +228,7 @@ public class SpireTrim implements Listener {
         }.runTaskLater(plugin, VULNERABLE_DURATION);
 
         if (target instanceof Player) {
-            ((Player) target).sendMessage(ChatColor.RED + "You've been marked by a Spire Dash!");
+            Messaging.sendTrimMessage((Player) target, "Spire", ChatColor.RED, "You've been marked by a Spire Dash!");
         }
     }
 
@@ -274,7 +273,7 @@ public class SpireTrim implements Listener {
             event.setCancelled(true);
 
             // Activate the ability
-            SpirePrimary(event.getPlayer());
+            abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
 }

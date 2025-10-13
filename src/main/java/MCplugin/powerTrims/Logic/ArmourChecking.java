@@ -1,32 +1,13 @@
-/*
- * This file is part of [ POWER TRIMS ].
- *
- * [POWER TRIMS] is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * [ POWER TRIMS ] is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
- *
- * Copyright (C) [2025] [ div ].
- */
-
-
-
 package MCplugin.powerTrims.Logic;
 
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ArmorMeta;
 import org.bukkit.inventory.meta.trim.ArmorTrim;
 import org.bukkit.inventory.meta.trim.TrimPattern;
+import org.bukkit.persistence.PersistentDataType;
 
 public class ArmourChecking {
     public static boolean hasFullTrimmedArmor(Player player, TrimPattern pattern) {
@@ -48,6 +29,32 @@ public class ArmourChecking {
         }
         return true; // All armor pieces have the specified trim pattern
     }
+
+    public static boolean hasFullUpgradedArmor(Player player, TrimPattern pattern, NamespacedKey upgradeKey) {
+        ItemStack[] armor = player.getInventory().getArmorContents();
+
+        for (ItemStack piece : armor) {
+            if (piece == null || piece.getType() == Material.AIR) {
+                return false; // Missing armor piece
+            }
+
+            if (!(piece.getItemMeta() instanceof ArmorMeta armorMeta)) {
+                return false; // Not an armor piece
+            }
+
+            // Check for the upgrade tag
+            if (!armorMeta.getPersistentDataContainer().has(upgradeKey, PersistentDataType.BYTE)) {
+                return false; // Armor piece is not upgraded
+            }
+
+            ArmorTrim trim = armorMeta.getTrim();
+            if (trim == null || trim.getPattern() != pattern) {
+                return false; // Missing or incorrect trim pattern
+            }
+        }
+        return true; // All armor pieces are upgraded and have the specified trim
+    }
+
 
     public static TrimPattern getEquippedTrim(Player player) {
         ItemStack[] armor = player.getInventory().getArmorContents();

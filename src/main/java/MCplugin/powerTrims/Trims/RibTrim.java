@@ -20,10 +20,8 @@
 
 package MCplugin.powerTrims.Trims;
 
-import MCplugin.powerTrims.Logic.ArmourChecking;
-import MCplugin.powerTrims.Logic.ConfigManager;
-import MCplugin.powerTrims.Logic.PersistentTrustManager;
-import MCplugin.powerTrims.Logic.TrimCooldownManager;
+import MCplugin.powerTrims.Logic.*;
+import MCplugin.powerTrims.config.ConfigManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
 import org.bukkit.attribute.Attribute;
@@ -35,7 +33,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityTargetEvent;
-import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.ItemStack;
@@ -51,6 +48,7 @@ public class RibTrim implements Listener {
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
     private final ConfigManager configManager;
+    private final AbilityManager abilityManager;
 
     // --- CONSTANTS ---
     private final long RIB_COOLDOWN;
@@ -67,27 +65,32 @@ public class RibTrim implements Listener {
     private final Map<UUID, LivingEntity> playerTargetMap = new HashMap<>();
     private final Map<UUID, List<Mob>> playerMinionMap = new HashMap<>();
 
-    public RibTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
+    public RibTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.trustManager = trustManager;
         this.configManager = configManager;
+        this.abilityManager = abilityManager;
 
-        RIB_COOLDOWN = configManager.getLong("rib.primary.cooldown", 60_000L);
-        MINION_LIFESPAN_TICKS = configManager.getLong("rib.primary.minion_lifespan_ticks", 1200L);
+        RIB_COOLDOWN = configManager.getLong("rib.primary.cooldown");
+        MINION_LIFESPAN_TICKS = configManager.getLong("rib.primary.minion_lifespan_ticks");
 
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
+        abilityManager.registerPrimaryAbility(TrimPattern.RIB, this::activateRibPrimary);
     }
 
 
 
     public void activateRibPrimary(Player player) {
+        if (!configManager.isTrimEnabled("rib")) {
+            return;
+        }
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.RIB) || cooldownManager.isOnCooldown(player, TrimPattern.RIB)) {
             return;
         }
 
         if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
-            player.sendMessage(ChatColor.RED + "You cannot use this ability in the current region.");
+            Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
 
@@ -148,7 +151,7 @@ public class RibTrim implements Listener {
         }
 
         cooldownManager.setCooldown(player, TrimPattern.RIB, RIB_COOLDOWN);
-        player.sendMessage("§8[§fRib§8] §7You have summoned Bone Warriors!");
+        Messaging.sendTrimMessage(player, "Rib", ChatColor.WHITE, "You have summoned Bone Warriors!");
     }
 
     /**
@@ -192,7 +195,7 @@ public class RibTrim implements Listener {
             event.setCancelled(true);
 
             // Activate the ability
-            activateRibPrimary(event.getPlayer());
+            abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
 
