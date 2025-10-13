@@ -3,7 +3,8 @@ version: '1.0'
 main: MCplugin.powerTrims.PowerTrimss
 api-version: '1.21'
 author: div
-softdepend: [PlaceholderAPI, WorldGuard]
+softdepend: [PlaceholderAPI, WorldGuard, Geyser-Spigot]
+depend: [packetevents]
 
 commands:
   trust:
