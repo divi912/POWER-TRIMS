@@ -1,4 +1,5 @@
-// CommandKeys / Macro Support
+// CommandKeys / Macro Support 
+// Or just ppl who are weird and want to use /utp
 package MCplugin.powerTrims.commands;
 import MCplugin.powerTrims.Logic.AbilityManager;
 import org.bukkit.ChatColor;
@@ -31,17 +32,17 @@ public class MacroSupport implements CommandExecutor {
         Player player = (Player) sender;
         TrimPattern equippedTrim = armourChecking.getEquippedTrim(player);
         if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "This command can only be used by players.");
+            sender.sendMessage(ChatColor.RED + "This command can only be used by players."); // yea im gonna use a trim power as console
             return true;
         }
         //if (equippedTrim != null && primaryAbilities.containsKey(equippedTrim)) {
         if (equippedTrim == null) {
             player.sendMessage(ChatColor.RED + "No Equipped Trim!");
             
-        
+        // basic asf
         } else {
             abilityManager.activatePrimaryAbility(player);
-            player.sendMessage(ChatColor.RED + "Used Trim Power!");
+            player.sendMessage(ChatColor.GREEN + "Used Trim Power!");
         }
        
         
