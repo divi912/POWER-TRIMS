@@ -5,7 +5,10 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ArmorMeta;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.trim.ArmorTrim;
+import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
@@ -19,22 +22,20 @@ public class Ritual {
     private final Player player;
     private final Location location;
     private final ItemStack[] armorSet;
-    private final List<ItemStack> requiredMaterials;
-    private final int duration;
+    private final RitualConfig config;
     private final RitualManager ritualManager;
     private final NamespacedKey upgradeKey;
     private final RitualAnimation animation;
 
-    public Ritual(JavaPlugin plugin, Player player, Location location, ItemStack[] armorSet, List<ItemStack> requiredMaterials, int duration, RitualManager ritualManager, NamespacedKey upgradeKey) {
+    public Ritual(JavaPlugin plugin, Player player, Location location, ItemStack[] armorSet, RitualConfig config, RitualManager ritualManager, NamespacedKey upgradeKey) {
         this.plugin = plugin;
         this.player = player;
         this.location = location;
         this.armorSet = armorSet;
-        this.requiredMaterials = requiredMaterials;
-        this.duration = duration;
+        this.config = config;
         this.ritualManager = ritualManager;
         this.upgradeKey = upgradeKey;
-        this.animation = new RitualAnimation(plugin, location, armorSet, requiredMaterials);
+        this.animation = new RitualAnimation(plugin, location, armorSet, config.getMaterials());
     }
 
     public void start() {
@@ -42,7 +43,7 @@ public class Ritual {
         location.getWorld().playSound(location, Sound.BLOCK_BEACON_ACTIVATE, 1.5f, 0.8f);
 
         new BukkitRunnable() {
-            int countdown = duration;
+            int countdown = config.getDuration();
 
             @Override
             public void run() {
@@ -66,14 +67,35 @@ public class Ritual {
         location.getWorld().playSound(location, Sound.ENTITY_PLAYER_LEVELUP, 2.0f, 1.0f);
         location.getWorld().playSound(location, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 2.0f, 1.0f);
 
+        TrimPattern pattern = null;
+
         for (ItemStack item : armorSet) {
             ItemMeta meta = item.getItemMeta();
             if (meta != null) {
+                if (pattern == null && meta instanceof ArmorMeta) {
+                    ArmorTrim trim = ((ArmorMeta) meta).getTrim();
+                    if (trim != null) {
+                        pattern = trim.getPattern();
+                    }
+                }
+
                 meta.getPersistentDataContainer().set(upgradeKey, PersistentDataType.BYTE, (byte) 1);
-                meta.setLore(Arrays.asList("§dUltimate Power Unlocked"));
+
+                List<String> newLore = Arrays.asList(
+                        "§7A relic of a forgotten age,",
+                        "§7pulsating with untold power.",
+                        "",
+                        "§d§lMYTHIC ARMOR"
+                );
+
+                meta.setLore(newLore);
                 item.setItemMeta(meta);
                 location.getWorld().dropItemNaturally(location, item);
             }
+        }
+
+        if (pattern != null) {
+            ritualManager.incrementUpgradeCount(pattern);
         }
 
         ritualManager.endRitual(player.getUniqueId());

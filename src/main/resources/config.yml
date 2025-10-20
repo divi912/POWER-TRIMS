@@ -7,12 +7,6 @@
 # To reload the configuration, use the command /powertrims reload, right now using reload command
 # only affects enable and disabling of trims, to change the ability values restart the server
 
-# --- Web Panel Settings ---
-# web-address: The IP address the web panel will run on. Use 0.0.0.0 to allow access from other devices on your network.
-web-address: "0.0.0.0"
-# web-port: The port the web panel will run on.
-web-port: 8080
-
 # Global settings for enabling or disabling entire trim powers.
 trims:
   sentry: true
@@ -96,9 +90,12 @@ coast:
     resistance-amplifier: 0
 dune:
   primary:
-    sandstorm_radius: 12
-    sandstorm_damage: 10
-    cooldown: 60000
+    cooldown: 600
+    duration: 200
+    height: 15.0
+    pull_strength: 0.5
+    lift_strength: 0.6
+    damage_per_second: 2.0
 eye:
   primary:
     true_sight_radius: 80.0

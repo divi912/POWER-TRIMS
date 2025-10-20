@@ -19,14 +19,14 @@ import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
 
-public class SilenceUltAnimations {
+public class SilenceTransformAnimations {
 
     private final JavaPlugin plugin;
     private final SilenceUlt silenceUlt;
     private final SilenceUltData data;
     private final Random random = new Random();
 
-    public SilenceUltAnimations(JavaPlugin plugin, SilenceUlt silenceUlt, SilenceUltData data) {
+    public SilenceTransformAnimations(JavaPlugin plugin, SilenceUlt silenceUlt, SilenceUltData data) {
         this.plugin = plugin;
         this.silenceUlt = silenceUlt;
         this.data = data;
@@ -38,7 +38,7 @@ public class SilenceUltAnimations {
         data.originalBlocks.put(playerUUID, new HashMap<>());
         data.rage.put(playerUUID, 0.0);
 
-        player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, (data.TRANSFORM_ANIMATION_SECONDS + 5) * 20, 0, false, false));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, (SilenceUltData.TRANSFORM_ANIMATION_SECONDS + 5) * 20, 0, false, false));
 
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_WARDEN_EMERGE, 2.0f, 0.5f);
         if (SilenceUltData.ENABLE_WEATHER_EFFECT) {
@@ -52,7 +52,6 @@ public class SilenceUltAnimations {
     private void startPreAnimation(Player player) {
         final int preAnimationDuration = 100; // 5 seconds
         final World world = player.getWorld();
-        final Location center = player.getLocation();
 
         new BukkitRunnable() {
             int ticks = 0;
@@ -70,18 +69,14 @@ public class SilenceUltAnimations {
                 world.setTime(world.getTime() + 1200);
 
                 if (ticks % 3 == 0) {
-                    double offsetX = (random.nextDouble() - 0.5) * data.LIGHTNING_RANDOM_OFFSET * 4;
-                    double offsetZ = (random.nextDouble() - 0.5) * data.LIGHTNING_RANDOM_OFFSET * 4;
-                    world.strikeLightningEffect(center.clone().add(offsetX, 0, offsetZ));
+                    double offsetX = (random.nextDouble() - 0.5) * SilenceUltData.LIGHTNING_RANDOM_OFFSET * 4;
+                    double offsetZ = (random.nextDouble() - 0.5) * SilenceUltData.LIGHTNING_RANDOM_OFFSET * 4;
+                    world.strikeLightningEffect(player.getLocation().clone().add(offsetX, 0, offsetZ));
                 }
 
-                for (Entity entity : world.getNearbyEntities(center, 25, 25, 25)) {
-                    if (entity instanceof Player nearbyPlayer && !nearbyPlayer.equals(player)) {
-                        Vector dir = center.toVector().subtract(nearbyPlayer.getEyeLocation().toVector()).normalize();
-                        nearbyPlayer.teleport(nearbyPlayer.getLocation().setDirection(dir));
-                        nearbyPlayer.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS, 20, 0));
-                    }
-                }
+                // --- MODIFIED: Use the new eyesight locking method ---
+                lockNearbyPlayerEyesight(player);
+
                 ticks++;
             }
         }.runTaskTimer(plugin, 0L, 1L);
@@ -89,18 +84,16 @@ public class SilenceUltAnimations {
 
     public void startMainAnimation(Player player) {
         UUID playerUUID = player.getUniqueId();
-        final int totalDurationTicks = data.TRANSFORM_ANIMATION_SECONDS * 20;
+        final int totalDurationTicks = SilenceUltData.TRANSFORM_ANIMATION_SECONDS * 20;
         final List<BlockDisplay> absorbingBlocks = new ArrayList<>();
         final List<BlockDisplay> shellBlocks = new ArrayList<>();
         final List<Vector> shellOffsets = createPlayerShellOffsets();
 
         for (Vector offset : shellOffsets) {
-            // Spawn blocks far away initially to have them fly in
             Location spawnLoc = player.getLocation().clone().add(offset.clone().multiply(3.0));
             BlockDisplay shellBlock = player.getWorld().spawn(spawnLoc, BlockDisplay.class, bd -> {
                 bd.setBlock(Material.SCULK.createBlockData());
                 Transformation t = bd.getTransformation();
-                // Start with a very small scale
                 t.getScale().set(0.01f);
                 bd.setTransformation(t);
             });
@@ -128,24 +121,23 @@ public class SilenceUltAnimations {
                 World world = loc.getWorld();
                 double progress = (double) ticks / totalDurationTicks;
 
-                // --- Sculk Shell Animation (MODIFIED) ---
-                // Use a sine curve for smooth "ease-out" growth (starts fast, slows down at the end)
+                // --- ADDED: Lock nearby players' eyesight during the main animation ---
+                lockNearbyPlayerEyesight(player);
+
+                // --- Sculk Shell Animation ---
                 double shellGrowthFactor = Math.sin(progress * Math.PI / 2);
 
                 for (int i = 0; i < shellBlocks.size(); i++) {
                     BlockDisplay shellBlock = shellBlocks.get(i);
                     if (!shellBlock.isValid()) continue;
 
-                    // The shell's final position/radius grows with the animation progress
                     Vector baseOffset = shellOffsets.get(i);
                     Vector currentOffset = baseOffset.clone().multiply(shellGrowthFactor);
                     Location targetPos = player.getLocation().clone().add(currentOffset);
 
-                    // Move the block towards its target position on the growing shell
                     Vector toTarget = targetPos.toVector().subtract(shellBlock.getLocation().toVector()).multiply(0.15);
                     shellBlock.teleport(shellBlock.getLocation().add(toTarget));
 
-                    // The scale of each block also grows, making the shell appear more solid over time
                     Transformation t = shellBlock.getTransformation();
                     float finalScale = 0.4f;
                     t.getScale().set((float) (shellGrowthFactor * finalScale));
@@ -192,6 +184,26 @@ public class SilenceUltAnimations {
         }.runTaskTimer(plugin, 0L, 1L));
     }
 
+    /**
+     * Finds all players within a radius of the target and forces them to look at the target.
+     *
+     * @param targetPlayer The player to look at.
+     */
+    private void lockNearbyPlayerEyesight(Player targetPlayer) {
+        Location targetLocation = targetPlayer.getEyeLocation();
+        for (Entity entity : targetPlayer.getWorld().getNearbyEntities(targetLocation, 30.0, 30.0, 30.0)) {
+            if (entity instanceof Player nearbyPlayer && !nearbyPlayer.equals(targetPlayer) &&
+                    nearbyPlayer.getGameMode() != GameMode.SPECTATOR) {
+
+                Vector direction = targetLocation.toVector().subtract(nearbyPlayer.getEyeLocation().toVector()).normalize();
+                Location newLookLocation = nearbyPlayer.getLocation().setDirection(direction);
+                nearbyPlayer.teleport(newLookLocation);
+                nearbyPlayer.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS, 40, 0, true, false));
+            }
+        }
+    }
+
+
     private List<Vector> createPlayerShellOffsets() {
         List<Vector> offsets = new ArrayList<>();
         float playerHeight = 2.8f;
@@ -225,8 +237,9 @@ public class SilenceUltAnimations {
         for (float y = 0.4f; y < 1.2f; y += 0.4f) {
             for (int i = 0; i < density / 2; i++) {
                 double angle = 2 * Math.PI * i / (density / 2.0);
-                offsets.add(new Vector(torsoRadius + armRadius + (Math.cos(angle) * armRadius), y, Math.sin(angle) * armRadius));
-                offsets.add(new Vector(-(torsoRadius + armRadius + (Math.cos(angle) * armRadius)), y, Math.sin(angle) * armRadius));
+                double x = torsoRadius + armRadius + (Math.cos(angle) * armRadius);
+                offsets.add(new Vector(x, y, Math.sin(angle) * armRadius));
+                offsets.add(new Vector(-(x), y, Math.sin(angle) * armRadius));
             }
         }
 

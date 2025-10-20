@@ -1,30 +1,10 @@
-/*
- * This file is part of [ POWER TRIMS ].
- *
- * [POWER TRIMS] is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * [ POWER TRIMS ] is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
- *
- * Copyright (C) [2025] [ div ].
- */
-
-
-
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.config.ConfigManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
+import org.bukkit.entity.BlockDisplay;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -36,11 +16,16 @@ import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
+import org.joml.AxisAngle4f;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class RaiserTrim implements Listener {
     private final JavaPlugin plugin;
@@ -49,14 +34,15 @@ public class RaiserTrim implements Listener {
     private final ConfigManager configManager;
     private final AbilityManager abilityManager;
 
-    // --- CONSTANTS ---
     private final long SURGE_COOLDOWN;
     private final double ENTITY_PULL_RADIUS;
     private final double PLAYER_UPWARD_BOOST;
     private final int PEARL_COOLDOWN_TICKS;
+    private static final List<Material> PILLAR_MATERIALS = List.of(Material.OBSIDIAN, Material.CRYING_OBSIDIAN, Material.DEEPSLATE_BRICKS);
+    private static final List<Material> SHATTER_MATERIALS = List.of(Material.DEEPSLATE_TILES, Material.COBBLED_DEEPSLATE, Material.PURPUR_BLOCK);
+    private static final List<Material> EARTHQUAKE_MATERIALS = List.of(Material.DEEPSLATE, Material.COBBLED_DEEPSLATE, Material.OBSIDIAN);
 
-    // --- STATE MANAGEMENT ---
-    // This set will track players who are currently in the air from this ability
+
     private final Set<UUID> awaitingLanding = new HashSet<>();
 
     public RaiserTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
@@ -78,85 +64,49 @@ public class RaiserTrim implements Listener {
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
         if (event.getPlayer().isSneaking()) {
-            // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);
-
-            // Activate the ability
             abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
 
-    /**
-     * Primary Ability: Launches the player upward and tags them for a landing effect.
-     */
     public void activateRaiserPrimary(Player player) {
-        if (!configManager.isTrimEnabled("raiser")) {
-            return;
-        }
-        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.RAISER) ||
-                cooldownManager.isOnCooldown(player, TrimPattern.RAISER)) {
-            return;
-        }
-
-        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
+        if (!configManager.isTrimEnabled("raiser")) return;
+        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.RAISER) || cooldownManager.isOnCooldown(player, TrimPattern.RAISER)) return;
+        if (Bukkit.getPluginManager().isPluginEnabled("WorldGuard") && !WorldGuardIntegration.canUseAbilities(player)) {
             Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
 
-        // Apply cooldown immediately
         cooldownManager.setCooldown(player, TrimPattern.RAISER, SURGE_COOLDOWN);
 
-        // Launch the player upward
         player.setVelocity(new Vector(0, PLAYER_UPWARD_BOOST, 0));
-        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.0f);
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.5f);
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_BREEZE_WIND_BURST, 1.0f, 1.0f);
+
+        playGeyserLaunchAnimation(player);
+
         Messaging.sendTrimMessage(player, "Raiser", ChatColor.GOLD, "Raiser's Surge activated!");
-
-        // Tag the player as awaiting their landing
         awaitingLanding.add(player.getUniqueId());
-
-        // Failsafe task: If the player never lands (e.g., logs out, flies away),
-        // remove them from the set after 5 seconds to prevent a memory leak.
-        plugin.getServer().getScheduler().runTaskLater(plugin, () ->
-                awaitingLanding.remove(player.getUniqueId()), 100L);
+        plugin.getServer().getScheduler().runTaskLater(plugin, () -> awaitingLanding.remove(player.getUniqueId()), 100L);
     }
 
-    /**
-     * RELIABILITY IMPROVEMENT: Detects when the player lands to trigger the effect.
-     */
-    @EventHandler
-    public void onPlayerMove(PlayerMoveEvent event) {
-        Player player = event.getPlayer();
-
-        // Only proceed if the player is in the air from the ability AND is now on the ground.
-        if (player.isOnGround() && awaitingLanding.remove(player.getUniqueId())) {
-            triggerLandingEffect(player);
-        }
-    }
-
-    /**
-     * Contains all the logic for the ground-slam effect.
-     */
     private void triggerLandingEffect(Player player) {
         Location landingLoc = player.getLocation();
         World world = player.getWorld();
 
-        world.playSound(landingLoc, Sound.ENTITY_GENERIC_EXPLODE, 1.0f, 0.8f);
+        world.playSound(landingLoc, Sound.ENTITY_GENERIC_EXPLODE, 1.2f, 0.7f);
+        playLandingAnimation(landingLoc);
 
-        // Pull and launch nearby entities
-        // OPTIMIZATION: Use getNearbyLivingEntities to ignore items, arrows, etc.
         for (LivingEntity target : world.getNearbyLivingEntities(landingLoc, ENTITY_PULL_RADIUS)) {
-            if (target.equals(player)) continue;
+            if (target.equals(player) || (target instanceof Player p && trustManager.isTrusted(player.getUniqueId(), p.getUniqueId()))) continue;
 
-            if (target instanceof Player targetPlayer && trustManager.isTrusted(player.getUniqueId(), targetPlayer.getUniqueId())) {
-                continue; // Skip trusted players
-            }
 
-            // Calculate pull vector and launch them
+            playEarthquakeAnimation(target);
+
             Vector pull = player.getLocation().toVector().subtract(target.getLocation().toVector()).normalize().multiply(1.5);
-            pull.setY(1.2); // Boost upward
+            pull.setY(1.2);
             target.setVelocity(pull);
 
-            // Apply effects
             target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 200, 2));
             target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 200, 0));
 
@@ -167,10 +117,105 @@ public class RaiserTrim implements Listener {
         }
     }
 
-    /**
-     * Passive Ability: Negates fall damage.
-     * OPTIMIZATION: Removed the duplicate event handler.
-     */
+    private void playEarthquakeAnimation(LivingEntity target) {
+        Location center = target.getLocation();
+        target.getWorld().playSound(center, Sound.BLOCK_DEEPSLATE_BREAK, 1.5f, 0.6f);
+
+        int particleCount = 30;
+        int animationTicks = 20;
+
+        for (int i = 0; i < particleCount; i++) {
+            ThreadLocalRandom r = ThreadLocalRandom.current();
+
+
+            BlockDisplay shard = target.getWorld().spawn(center, BlockDisplay.class, bd -> {
+                bd.setBlock(EARTHQUAKE_MATERIALS.get(r.nextInt(EARTHQUAKE_MATERIALS.size())).createBlockData());
+                bd.setInterpolationDuration(animationTicks);
+                bd.setInterpolationDelay(-1);
+                Transformation t = bd.getTransformation();
+                t.getScale().set(r.nextFloat() * 0.7f + 0.3f);
+                t.getLeftRotation().set(new AxisAngle4f(r.nextFloat() * 360, r.nextFloat(), r.nextFloat(), r.nextFloat()));
+                bd.setTransformation(t);
+            });
+
+            Vector direction = new Vector(r.nextDouble() - 0.5, r.nextDouble(0.8, 1.2), r.nextDouble() - 0.5).normalize();
+            Location finalPos = center.clone().add(direction.multiply(r.nextDouble(2.0, 3.5)));
+
+            shard.teleport(finalPos);
+            Transformation finalTransform = shard.getTransformation();
+            finalTransform.getScale().set(0f);
+            shard.setTransformation(finalTransform);
+
+            new BukkitRunnable() { @Override public void run() { shard.remove(); }}.runTaskLater(plugin, animationTicks + 1);
+        }
+    }
+
+
+    private void playGeyserLaunchAnimation(Player player) {
+        Location center = player.getLocation();
+        int particleCount = 20;
+        int animationTicks = 15;
+
+        player.getWorld().spawnParticle(Particle.GUST_EMITTER_LARGE, center, 1, 0, 0, 0, 0);
+
+        for (int i = 0; i < particleCount; i++) {
+            ThreadLocalRandom r = ThreadLocalRandom.current();
+            BlockDisplay particle = player.getWorld().spawn(center, BlockDisplay.class, bd -> {
+                bd.setBlock(Material.WHITE_WOOL.createBlockData());
+                bd.setInterpolationDuration(animationTicks);
+                bd.setInterpolationDelay(-1);
+                Transformation t = bd.getTransformation();
+                t.getScale().set(r.nextFloat() * 0.5f + 0.2f);
+                bd.setTransformation(t);
+            });
+
+            double angle = r.nextDouble(Math.PI * 4);
+            double radius = r.nextDouble(1.5, 3.0);
+            Location finalPos = center.clone().add(Math.cos(angle) * radius, 4.0, Math.sin(angle) * radius);
+
+            particle.teleport(finalPos);
+            Transformation finalTransform = particle.getTransformation();
+            finalTransform.getScale().set(0f);
+            particle.setTransformation(finalTransform);
+
+            new BukkitRunnable() { @Override public void run() { particle.remove(); }}.runTaskLater(plugin, animationTicks + 1);
+        }
+    }
+
+    private void playLandingAnimation(Location center) {
+        int particleCount = 60;
+        int animationTicks = 25;
+        for (int i = 0; i < particleCount; i++) {
+            ThreadLocalRandom r = ThreadLocalRandom.current();
+            Material material = SHATTER_MATERIALS.get(r.nextInt(SHATTER_MATERIALS.size()));
+            BlockDisplay shard = center.getWorld().spawn(center, BlockDisplay.class, bd -> {
+                bd.setBlock(material.createBlockData());
+                bd.setInterpolationDuration(animationTicks);
+                bd.setInterpolationDelay(-1);
+                Transformation t = bd.getTransformation();
+                t.getScale().set(r.nextFloat() * 0.6f + 0.3f);
+                t.getLeftRotation().set(new AxisAngle4f(r.nextFloat() * 360, r.nextFloat(), r.nextFloat(), r.nextFloat()));
+                bd.setTransformation(t);
+            });
+            double angle = r.nextDouble(Math.PI * 2);
+            double distance = r.nextDouble(ENTITY_PULL_RADIUS * 0.8, ENTITY_PULL_RADIUS);
+            Location finalPos = center.clone().add(Math.cos(angle) * distance, r.nextDouble(0.3), Math.sin(angle) * distance);
+            shard.teleport(finalPos);
+            Transformation finalTransform = shard.getTransformation();
+            finalTransform.getScale().set(0f);
+            shard.setTransformation(finalTransform);
+            new BukkitRunnable() { @Override public void run() { shard.remove(); }}.runTaskLater(plugin, animationTicks + 1);
+        }
+    }
+
+    @EventHandler
+    public void onPlayerMove(PlayerMoveEvent event) {
+        Player player = event.getPlayer();
+        if (player.isOnGround() && awaitingLanding.remove(player.getUniqueId())) {
+            triggerLandingEffect(player);
+        }
+    }
+
     @EventHandler
     public void onFallDamage(EntityDamageEvent event) {
         if (!(event.getEntity() instanceof Player player)) {

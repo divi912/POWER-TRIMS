@@ -19,9 +19,10 @@
 
 package MCplugin.powerTrims.Logic;
 
+import MCplugin.powerTrims.PowerTrimss;
+import MCplugin.powerTrims.ultimates.silenceult.SilenceUlt;
 import me.clip.placeholderapi.PlaceholderAPI;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -38,12 +39,15 @@ public class TrimCooldownManager {
     private DisplayMode displayMode;
     private boolean placeholderApiEnabled;
 
+    private final PowerTrimss powerTrimsPlugin;
+
     public enum DisplayMode { SCOREBOARD, ACTION_BAR, NONE }
 
     public TrimCooldownManager(JavaPlugin plugin) {
         this.plugin = plugin;
+        this.powerTrimsPlugin = (PowerTrimss) plugin;
         this.scoreboardManager = Bukkit.getScoreboardManager();
-        this.dataManager = ((MCplugin.powerTrims.PowerTrimss) plugin).getDataManager();
+        this.dataManager = powerTrimsPlugin.getDataManager();
         this.placeholderApiEnabled = Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI");
 
         loadConfig();
@@ -53,13 +57,13 @@ public class TrimCooldownManager {
             public void run() {
                 updateDisplays();
             }
-        }.runTaskTimer(plugin, 0L, 20L);
+        }.runTaskTimer(plugin, 0L, 5L);
     }
 
-    // --- ADDED: Public method to reload the config and apply changes ---
     public void reload() {
         loadConfig();
     }
+
     private void loadConfig() {
         FileConfiguration config = plugin.getConfig();
         String mode = config.getString("cooldown-display", "ACTION_BAR").toUpperCase();
@@ -71,45 +75,55 @@ public class TrimCooldownManager {
         }
     }
 
-    // --- RESTRUCTURED: This method now correctly handles switching between display modes ---
     private void updateDisplays() {
         for (Player player : Bukkit.getOnlinePlayers()) {
-            // First, if the mode is NOT scoreboard, we ensure our scoreboard is gone.
             if (displayMode != DisplayMode.SCOREBOARD) {
-                // Use the existing safe cleanup method.
                 removeScoreboard(player);
             }
 
-            // Now, apply the correct display based on the current mode.
             if (displayMode == DisplayMode.SCOREBOARD) {
                 showScoreboard(player);
             } else if (displayMode == DisplayMode.ACTION_BAR) {
                 showActionBar(player);
             }
-            // The 'NONE' case is now handled perfectly by the cleanup logic at the top.
         }
     }
 
-
     private void showActionBar(Player player) {
         TrimPattern trim = ArmourChecking.getEquippedTrim(player);
-        if (trim == null) {
-             // Potentially hide action bar if no trim is equipped. For now, do nothing.
-            return;
+        String finalMessage = "";
+
+        String trimCooldownString = "";
+        if (trim != null) {
+            long cooldown = getRemainingCooldown(player, trim) / 1000;
+            String cooldownText = (cooldown > 0) ? ChatColor.RED + "⏳ " + cooldown + "s" : ChatColor.GREEN + "✅ Ready!";
+            trimCooldownString = ChatColor.GRAY + "Trim: " + ChatColor.GOLD + getTrimDisplayName(trim) + " - " + cooldownText;
         }
 
-        long cooldown = getRemainingCooldown(player, trim) / 1000;
-        Component msg = Component.text("⏳ " + getTrimDisplayName(trim) + " – ")
-                .append(Component.text((cooldown > 0) ? "⏳ " + cooldown + "s" : "✅ Ready!")
-                        .color(cooldown > 0 ? NamedTextColor.RED : NamedTextColor.GREEN));
+        String ultimateString = "";
+        if (trim == TrimPattern.SILENCE) {
+            SilenceUlt silenceUlt = powerTrimsPlugin.getSilenceUlt();
+            if (silenceUlt != null) {
+                ultimateString = silenceUlt.getUltimateActionbarString(player);
+            }
+        }
 
-        player.sendActionBar(msg);
+        finalMessage = trimCooldownString;
+        if (!ultimateString.isEmpty()) {
+            if (!finalMessage.isEmpty()) {
+                finalMessage += ChatColor.DARK_GRAY + " | ";
+            }
+            finalMessage += ultimateString;
+        }
+
+        if (!finalMessage.isEmpty()) {
+            player.sendActionBar(Component.text(finalMessage));
+        }
     }
 
     private void showScoreboard(Player player) {
         Scoreboard board = player.getScoreboard();
 
-        // To prevent conflicts, we should use a new scoreboard if the player is using the main one.
         if (board == scoreboardManager.getMainScoreboard()) {
             board = scoreboardManager.getNewScoreboard();
             player.setScoreboard(board);
@@ -123,7 +137,6 @@ public class TrimCooldownManager {
         obj.setDisplaySlot(DisplaySlot.SIDEBAR);
 
         if (placeholderApiEnabled) {
-            // Use PAPI to parse placeholders, ensuring maximum compatibility
             obj.displayName(Component.text(PlaceholderAPI.setPlaceholders(player, "§6❖ §lTrim Status §6❖")));
             obj.getScore("§7━━━━━━━━━━━━━━━━━━━━━━━━━━━━§8").setScore(9);
             obj.getScore(PlaceholderAPI.setPlaceholders(player, "§e⚔ §lTrim: §b%powertrims_equipped_trim%")).setScore(9);
@@ -134,18 +147,12 @@ public class TrimCooldownManager {
             obj.getScore("§c         Created by §ldivi").setScore(3);
             obj.getScore("§8     ⚡ §6§l POWER TRIMS§8 ⚡").setScore(1);
         } else {
-            // Fallback to manual string concatenation if PAPI is not available
             obj.displayName(Component.text(ChatColor.GOLD + "❖ " + ChatColor.BOLD + "Trim Status" + ChatColor.RESET + ChatColor.GOLD + " ❖"));
-
             TrimPattern equippedTrim = ArmourChecking.getEquippedTrim(player);
-
             obj.getScore(ChatColor.GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + ChatColor.DARK_GRAY).setScore(9);
-
             String trimDisplay = (equippedTrim != null) ? ChatColor.AQUA + getTrimDisplayName(equippedTrim) : ChatColor.RED + "No Power";
             obj.getScore(ChatColor.YELLOW + "⚔ " + ChatColor.BOLD + "Trim: " + trimDisplay).setScore(8);
-
             obj.getScore(ChatColor.RESET + " ").setScore(7);
-
             if (equippedTrim != null) {
                 long cooldownTime = getRemainingCooldown(player, equippedTrim) / 1000;
                 String cooldownText = (cooldownTime > 0)
@@ -155,7 +162,6 @@ public class TrimCooldownManager {
             } else {
                 obj.getScore(ChatColor.YELLOW + "⚡ " + ChatColor.BOLD + "Status: " + ChatColor.GRAY + "None").setScore(6);
             }
-
             obj.getScore(ChatColor.RESET + "  ").setScore(5);
             obj.getScore(ChatColor.GRAY + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━" + ChatColor.BLACK).setScore(4);
             obj.getScore(ChatColor.DARK_RED+ "         Created by " + ChatColor.RED + "divi").setScore(3);
@@ -199,6 +205,7 @@ public class TrimCooldownManager {
     }
 
     public String getTrimDisplayName(TrimPattern pattern) {
+        if (pattern == null) return "";
         if (pattern == TrimPattern.SILENCE) {
             return "Silence";
         } else if (pattern == TrimPattern.SPIRE) {

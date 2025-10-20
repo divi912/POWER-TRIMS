@@ -1,46 +1,24 @@
-/*
- * This file is part of [ POWER TRIMS ].
- *
- * [POWER TRIMS] is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * [ POWER TRIMS ] is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
- *
- * Copyright (C) [2025] [ div ].
- */
-
-
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.config.ConfigManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Player;
+import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Transformation;
+import org.bukkit.util.Vector;
+import org.jetbrains.annotations.NotNull;
 
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 public class EyeTrim implements Listener {
     private final JavaPlugin plugin;
@@ -48,16 +26,14 @@ public class EyeTrim implements Listener {
     private final PersistentTrustManager trustManager;
     private final ConfigManager configManager;
     private final AbilityManager abilityManager;
-
-    // --- CONSTANTS ---
     private final double TRUE_SIGHT_RADIUS;
     private final int TRUE_SIGHT_DURATION_TICKS;
     private final long TRUE_SIGHT_COOLDOWN;
     private final long TASK_INTERVAL_TICKS;
     private final double TRUE_SIGHT_VERTICAL_RADIUS;
-
-    // --- STATE MANAGEMENT ---
     private final Map<UUID, BukkitRunnable> activeTrueSightTasks = new HashMap<>();
+    private final Map<UUID, BukkitRunnable> activeAnimationTasks = new HashMap<>();
+    private final Map<UUID, List<Entity>> activeEyeEffects = new HashMap<>();
 
     public EyeTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
@@ -79,10 +55,7 @@ public class EyeTrim implements Listener {
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
         if (event.getPlayer().isSneaking()) {
-            // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);
-
-            // Activate the ability
             abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
@@ -98,50 +71,45 @@ public class EyeTrim implements Listener {
             return;
         }
 
-        // Cancel any existing task for this player to prevent duplicates
         activeTrueSightTasks.computeIfPresent(player.getUniqueId(), (uuid, task) -> {
             task.cancel();
             return null;
         });
 
-        // Activation effects
-        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ELDER_GUARDIAN_CURSE, 1.0f, 2.0f);
-        player.getWorld().playSound(player.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 1.0f, 1.5f);
-        createEyeEffect(player, true); // Initial, more intense effect
+        startEyeEffect(player);
+        BukkitRunnable trueSightTask = getBukkitRunnable(player);
 
-        // This set will track entities affected ONLY during this activation
+        activeTrueSightTasks.put(player.getUniqueId(), trueSightTask);
+        trueSightTask.runTaskTimer(plugin, 0L, TASK_INTERVAL_TICKS);
+
+        cooldownManager.setCooldown(player, TrimPattern.EYE, TRUE_SIGHT_COOLDOWN);
+        Messaging.sendTrimMessage(player, "Eye", ChatColor.AQUA, "you used eye ability!");
+    }
+
+    private @NotNull BukkitRunnable getBukkitRunnable(Player player) {
         final Set<UUID> affectedEntities = new HashSet<>();
 
-        BukkitRunnable trueSightTask = new BukkitRunnable() {
+        return new BukkitRunnable() {
             private int ticksRun = 0;
 
             @Override
             public void run() {
-                // Stop condition: time is up or player logged off
                 if (ticksRun >= TRUE_SIGHT_DURATION_TICKS || !player.isOnline()) {
                     this.cancel();
                     return;
                 }
-
-                // OPTIMIZATION: Scan for nearby entities
                 for (Entity entity : player.getNearbyEntities(TRUE_SIGHT_RADIUS, TRUE_SIGHT_VERTICAL_RADIUS, TRUE_SIGHT_RADIUS)) {
                     if (entity instanceof LivingEntity target && !target.equals(player)) {
-                        // Skip trusted players
                         if (target instanceof Player targetPlayer && trustManager.isTrusted(player.getUniqueId(), targetPlayer.getUniqueId())) {
                             continue;
                         }
-
-                        // THE KEY OPTIMIZATION: Only affect each entity ONCE by adding its UUID to a set.
-                        // The .add() method returns true only if the element was not already in the set.
                         if (affectedEntities.add(target.getUniqueId())) {
                             applyDebuffs(target);
                         }
                     }
                 }
-
-                // Pulse the visual effect
-                if(ticksRun % (TASK_INTERVAL_TICKS * 5) == 0){ // Every 5 seconds
-                    createEyeEffect(player, false);
+                if (ticksRun % (TASK_INTERVAL_TICKS * 5) == 0) {
+                    startEyeEffect(player);
                 }
 
                 ticksRun += (int) TASK_INTERVAL_TICKS;
@@ -150,59 +118,127 @@ public class EyeTrim implements Listener {
             @Override
             public synchronized void cancel() throws IllegalStateException {
                 super.cancel();
-                // Clean up the map once the task is truly cancelled
                 activeTrueSightTasks.remove(player.getUniqueId());
             }
         };
-
-        // Store and run the task
-        activeTrueSightTasks.put(player.getUniqueId(), trueSightTask);
-        // OPTIMIZATION: Run task once per second, not 10 times per second
-        trueSightTask.runTaskTimer(plugin, 0L, TASK_INTERVAL_TICKS);
-
-        cooldownManager.setCooldown(player, TrimPattern.EYE, TRUE_SIGHT_COOLDOWN);
-        Messaging.sendTrimMessage(player, "Eye", ChatColor.AQUA, "True Sight activated!");
     }
 
-    /**
-     * Applies the suite of debuffs to a target.
-     * @param target The LivingEntity to affect.
-     */
     private void applyDebuffs(LivingEntity target) {
-        // Remove invisibility to reveal the target
         target.removePotionEffect(PotionEffectType.INVISIBILITY);
 
-        // Apply effects
-        target.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 1200, 0, false, false)); // 1 minute
-        target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 600, 0, false, false)); // 30 seconds
-        target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 600, 1, false, false)); // 30 seconds
+        target.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 1200, 0, false, false));
+        target.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 600, 0, false, false));
+        target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 600, 1, false, false));
     }
 
-    /**
-     * Creates the visual particle effect for the ability.
-     * @param player The player to center the effect on.
-     * @param isInitialActivation If true, a more intense version of the effect is played.
-     */
-    private void createEyeEffect(Player player, boolean isInitialActivation) {
-        Location loc = player.getLocation();
+    private void startEyeEffect(Player player) {
+        stopEyeEffect(player);
+
         World world = player.getWorld();
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ELDER_GUARDIAN_CURSE, 1.0f, 2.0f);
+        player.getWorld().playSound(player.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 1.0f, 1.5f);
 
-        // OPTIMIZATION: Reduced the radius from an invisible 80 blocks to a visible 15 blocks.
-        double effectRadius = 15.0;
+        new BukkitRunnable() {
+            private int ticks = 0;
+            private final int duration = 20;
 
-        // This effect is intense, so only play it on the initial cast.
-        if(isInitialActivation) {
-            for (double angle = 0; angle < Math.PI * 2; angle += Math.PI / 20) {
-                double x = Math.cos(angle) * effectRadius;
-                double z = Math.sin(angle) * effectRadius;
-                Location pLoc = loc.clone().add(x, 0.1, z);
-                world.spawnParticle(Particle.SMOKE, pLoc, 3, 0, 0, 0, 0.05);
-                world.spawnParticle(Particle.DUST, pLoc, 2, new Particle.DustOptions(Color.fromRGB(200, 0, 0), 1.2f));
+            @Override
+            public void run() {
+                if (ticks++ >= duration || !player.isOnline()) {
+                    this.cancel();
+                    return;
+                }
+                double progress = (double) ticks / duration;
+                double currentRadius = TRUE_SIGHT_RADIUS * progress;
+                Location center = player.getLocation();
+
+                for (int i = 0; i < 360; i += 10) {
+                    double angle = Math.toRadians(i);
+                    double x = Math.cos(angle) * currentRadius;
+                    double z = Math.sin(angle) * currentRadius;
+                    Location particleLoc = center.clone().add(x, 0.1, z);
+                    world.spawnParticle(Particle.WITCH, particleLoc, 1, 0, 0, 0, 0);
+                }
             }
+        }.runTaskTimer(plugin, 0L, 1L);
+
+        final List<Entity> effectEntities = new ArrayList<>();
+        final int INTERPOLATION_DURATION = 5;
+
+        ItemDisplay eye = world.spawn(player.getEyeLocation(), ItemDisplay.class, eyeDisplay -> {
+            eyeDisplay.setItemStack(new ItemStack(Material.ENDER_EYE));
+            eyeDisplay.setBillboard(Display.Billboard.CENTER);
+            eyeDisplay.setInterpolationDelay(-1);
+            eyeDisplay.setInterpolationDuration(INTERPOLATION_DURATION);
+            Transformation t = eyeDisplay.getTransformation();
+            t.getScale().set(0f);
+            eyeDisplay.setTransformation(t);
+        });
+        effectEntities.add(eye);
+
+        activeEyeEffects.put(player.getUniqueId(), effectEntities);
+
+        BukkitRunnable animationTask = new BukkitRunnable() {
+            private int ticks = 0;
+            private final int vanishTick = 60;
+
+            @Override
+            public void run() {
+                if (!player.isOnline() || !activeEyeEffects.containsKey(player.getUniqueId())) {
+                    this.cancel();
+                    return;
+                }
+
+                if (ticks >= vanishTick) {
+                    stopEyeEffect(player);
+                    this.cancel();
+                    return;
+                }
+
+                Location eyeTargetPos = player.getEyeLocation();
+                Vector direction = eyeTargetPos.getDirection().setY(0).normalize();
+                eyeTargetPos.add(direction.multiply(-0.7)).add(0, 0.4, 0);
+
+                if (ticks == 0) {
+                    eye.teleport(eyeTargetPos);
+                    Transformation t = eye.getTransformation();
+                    t.getScale().set(0.6f);
+                    eye.setTransformation(t);
+                } else {
+                    eye.teleport(eyeTargetPos);
+                }
+                ticks++;
+            }
+        };
+
+        animationTask.runTaskTimer(plugin, 0L, 1L);
+        activeAnimationTasks.put(player.getUniqueId(), animationTask);
+    }
+
+    private void stopEyeEffect(Player player) {
+        UUID id = player.getUniqueId();
+
+        if (activeAnimationTasks.containsKey(id)) {
+            activeAnimationTasks.get(id).cancel();
+            activeAnimationTasks.remove(id);
         }
 
-        // Central glowing effect (the "eye")
-        world.spawnParticle(Particle.DUST, loc.clone().add(0, 1.2, 0), 20, new Particle.DustOptions(Color.fromRGB(150, 0, 0), 1.5f));
-        world.spawnParticle(Particle.FLAME, loc.clone().add(0, 1.2, 0), 10, 0.5, 0.5, 0.5, 0.05);
+        if (activeEyeEffects.containsKey(id)) {
+            List<Entity> entities = activeEyeEffects.remove(id);
+            if (entities != null && !entities.isEmpty()) {
+                Entity eyeEntity = entities.get(0);
+                if (eyeEntity instanceof ItemDisplay eye && eye.isValid()) {
+                    Transformation t = eye.getTransformation();
+                    t.getScale().set(0f);
+                    eye.setTransformation(t);
+                    new BukkitRunnable() {
+                        @Override
+                        public void run() {
+                            if (eye.isValid()) eye.remove();
+                        }
+                    }.runTaskLater(plugin, eye.getInterpolationDuration() + 1);
+                }
+            }
+        }
     }
 }

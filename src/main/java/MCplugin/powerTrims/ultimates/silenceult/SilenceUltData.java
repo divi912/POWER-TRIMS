@@ -4,6 +4,7 @@ import org.bukkit.Location;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -24,6 +25,7 @@ public class SilenceUltData {
     public static final int BOOM_DAMAGE = 15;
     public static final double BOOM_LENGTH = 20.0;
     public static final double BOOM_AOE_RADIUS = 3.0;
+    public final Set<UUID> chargingBoomPlayers = new HashSet<>();
 
     public static final long GRASP_COOLDOWN_SECONDS = 15;
     public static final double GRASP_RADIUS = 25.0;
@@ -39,12 +41,8 @@ public class SilenceUltData {
     // --- Transformation Animation Constants ---
     public static final int TRANSFORM_ANIMATION_SECONDS = 6;
     public static final int SCULK_SPREAD_RADIUS = 10;
-    public static final int LIGHTNING_STRIKES_PER_TICK = 2;
     public static final double LIGHTNING_RANDOM_OFFSET = 8.0;
     public static final boolean ENABLE_WEATHER_EFFECT = true;
-    public static final double AURA_RADIUS = 10.0;
-    public static final double AURA_DAMAGE = 1.0;
-    public static final int PRE_DETONATION_TICKS = 30;
 
     public final Map<UUID, Double> rage = new ConcurrentHashMap<>();
     public final Set<UUID> transformingPlayers = ConcurrentHashMap.newKeySet();
@@ -55,6 +53,7 @@ public class SilenceUltData {
     public final Map<UUID, Long> deepDarkGraspCooldowns = new ConcurrentHashMap<>();
     public final Map<UUID, Long> obliteratingLeapCooldowns = new ConcurrentHashMap<>();
     public final Map<UUID, BukkitTask> wardenTimers = new ConcurrentHashMap<>();
+    public final Map<UUID, Long> wardenEndTimes = new ConcurrentHashMap<>(); // ADDED
 
     // --- Centralized storage for tasks and block data ---
     public final Map<UUID, Map<Location, BlockData>> originalBlocks = new ConcurrentHashMap<>();

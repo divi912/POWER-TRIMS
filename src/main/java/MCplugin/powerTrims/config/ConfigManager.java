@@ -43,11 +43,14 @@ public class ConfigManager {
     }
 
     public boolean isTrimEnabled(String trimName) {
-        // Defaults to true if a trim is not specified in the config.
+
         return trimEnabledStatus.getOrDefault(trimName.toLowerCase(), true);
     }
 
-    // Getters no longer need a default value, as it's handled by the defaults system.
+    public FileConfiguration getConfig() {
+        return config;
+    }
+
     public int getInt(String path) {
         return config.getInt(path);
     }
@@ -58,9 +61,5 @@ public class ConfigManager {
 
     public long getLong(String path) {
         return config.getLong(path);
-    }
-
-    public boolean getBoolean(String path) {
-        return config.getBoolean(path);
     }
 }

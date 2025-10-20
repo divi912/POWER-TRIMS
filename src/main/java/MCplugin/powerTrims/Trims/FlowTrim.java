@@ -4,6 +4,8 @@ import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.config.ConfigManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
+import org.bukkit.entity.BlockDisplay;
+import org.bukkit.entity.Display;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -13,67 +15,66 @@ import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
-/**
- * Flow Trim Ability: Toggleable Gale Dash costs health continuously until deactivated or duration expires.
- */
 public class FlowTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
     private final ConfigManager configManager;
     private final AbilityManager abilityManager;
-    private final NamespacedKey effectKey;
     private final NamespacedKey dashEndFallImmunityKey;
 
-
-    // --- CONSTANTS ---
     private final int HEART_COST_INTERVAL;
     private final double HEART_COST_AMOUNT;
     private final long DASH_COOLDOWN;
-    // --- NEW: Added duration constant ---
     private final int DASH_DURATION;
 
     private final Map<UUID, BukkitRunnable> dashTasks = new HashMap<>();
     private final Map<UUID, Boolean> isDashing = new HashMap<>();
+    private final Set<UUID> activationDebounce = new HashSet<>();
 
     public FlowTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
         this.configManager = configManager;
         this.abilityManager = abilityManager;
-        this.effectKey = new NamespacedKey(plugin, "flow_trim_effect");
         this.dashEndFallImmunityKey = new NamespacedKey(plugin, "flow_trim_dash_end_immune");
-
 
         HEART_COST_INTERVAL = configManager.getInt("flow.primary.heart_cost_interval");
         HEART_COST_AMOUNT = configManager.getDouble("flow.primary.heart_cost_amount");
         DASH_COOLDOWN = configManager.getLong("flow.primary.cooldown");
         DASH_DURATION = configManager.getInt("flow.primary.duration");
 
-        abilityManager.registerPrimaryAbility(TrimPattern.FLOW, this::FlowPrimary);
+        abilityManager.registerPrimaryAbility(TrimPattern.FLOW, this::flowPrimary);
     }
 
+    public void flowPrimary(Player player) {
+        UUID id = player.getUniqueId();
 
-
-    public void FlowPrimary(Player player) {
-        if (!configManager.isTrimEnabled("flow")) {
+        if (activationDebounce.contains(id)) {
             return;
         }
-        UUID id = player.getUniqueId();
+
+        activationDebounce.add(id);
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                activationDebounce.remove(id);
+            }
+        }.runTaskLater(plugin, 10L);
+
+        if (!configManager.isTrimEnabled("flow")) return;
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.FLOW)) return;
 
-        // Deactivate if already dashing
         if (isDashing.getOrDefault(id, false)) {
-            deactivateDash(player, "You have deactivated §bGale Dash§7.");
+            deactivateDash(player, "You have deactivated Dash.");
             return;
         }
 
-        // Cannot activate if on cooldown
         if (cooldownManager.isOnCooldown(player, TrimPattern.FLOW)) {
             Messaging.sendTrimMessage(player, "Flow", ChatColor.AQUA, "Ability on cooldown!");
             return;
@@ -85,13 +86,9 @@ public class FlowTrim implements Listener {
         }
 
         player.setAllowFlight(true);
-        // Activation effects
-        Location loc = player.getLocation();
-        World world = player.getWorld();
-        world.playSound(loc, Sound.ENTITY_BLAZE_SHOOT, 1.0f, 1.5f);
-        createWindEffect(player);
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_BLAZE_SHOOT, 1.0f, 1.5f);
+        createGaleDashAnimation(player);
 
-        // Start dash task
         BukkitRunnable task = new BukkitRunnable() {
             int tickCount = 0;
 
@@ -102,30 +99,28 @@ public class FlowTrim implements Listener {
                     return;
                 }
 
-                // --- NEW: Deactivate if duration runs out ---
                 if (tickCount >= DASH_DURATION) {
-                    deactivateDash(player, "Gale Dash has expired.");
+                    deactivateDash(player, "Dash has expired.");
                     this.cancel();
                     return;
                 }
 
-                // Drain health each interval
                 if (tickCount % HEART_COST_INTERVAL == 0) {
                     double hp = player.getHealth();
                     if (hp > HEART_COST_AMOUNT) {
                         player.setHealth(hp - HEART_COST_AMOUNT);
                     } else {
-                        Messaging.sendTrimMessage(player, "Flow", ChatColor.AQUA, "§cNot enough health to maintain Gale Dash!");
-                        deactivateDash(player, "Gale Dash ended due to low health.");
+                        deactivateDash(player, "Dash ended due to low health.");
                         this.cancel();
                         return;
                     }
                 }
 
-                // Propel and particle
                 Vector dir = player.getLocation().getDirection().normalize();
                 player.setVelocity(dir.multiply(1.2));
-                createWindEffect(player);
+                if (tickCount % 3 == 0) {
+                    createGaleDashAnimation(player);
+                }
 
                 tickCount++;
             }
@@ -134,7 +129,7 @@ public class FlowTrim implements Listener {
         isDashing.put(id, true);
         dashTasks.put(id, task);
         task.runTaskTimer(plugin, 0L, 1L);
-        Messaging.sendTrimMessage(player, "Flow", ChatColor.AQUA, "Activated §bGale Dash§7! §7(uses " + (HEART_COST_AMOUNT/2) + " ❤/sec)");
+        Messaging.sendTrimMessage(player, "Flow", ChatColor.AQUA, "Activated dash! §7(uses " + (HEART_COST_AMOUNT / 2) + " ❤/sec)");
     }
 
     private void deactivateDash(Player player, String message) {
@@ -148,32 +143,72 @@ public class FlowTrim implements Listener {
             player.setAllowFlight(false);
         }
         cooldownManager.setCooldown(player, TrimPattern.FLOW, DASH_COOLDOWN);
-        player.getPersistentDataContainer().set(dashEndFallImmunityKey, PersistentDataType.BYTE, (byte) 1); // Set the flag
+        player.getPersistentDataContainer().set(dashEndFallImmunityKey, PersistentDataType.BYTE, (byte) 1);
+        Messaging.sendTrimMessage(player, "Flow", ChatColor.AQUA, message);
     }
 
-    private void createWindEffect(Player player) {
-        Location loc = player.getLocation();
+    private void createGaleDashAnimation(Player player) {
+        Location center = player.getLocation().add(0, 1.2, 0);
         World world = player.getWorld();
-        for (int i = 0; i < 8; i++) {
-            double angle = Math.toRadians(i * 45);
-            double x = Math.cos(angle) * 0.5;
-            double z = Math.sin(angle) * 0.5;
-            world.spawnParticle(Particle.CLOUD, loc.clone().add(-x, 0.5, -z), 0, 0, 0, 0, 0.05);
+        final List<Material> cloudMaterials = List.of(Material.WHITE_WOOL, Material.LIGHT_GRAY_WOOL, Material.WHITE_CONCRETE_POWDER);
+        final int blocksPerPuff = 6;
+        final int animationTicks = 40;
+
+        for (int i = 0; i < blocksPerPuff; i++) {
+            ThreadLocalRandom r = ThreadLocalRandom.current();
+            BlockDisplay block = world.spawn(center, BlockDisplay.class, bd -> {
+                bd.setBlock(cloudMaterials.get(r.nextInt(cloudMaterials.size())).createBlockData());
+                bd.setBrightness(new Display.Brightness(10, 10));
+
+                bd.setInterpolationDelay(-1);
+                bd.setInterpolationDuration(animationTicks);
+
+                Transformation initialTransform = bd.getTransformation();
+                initialTransform.getScale().set(r.nextFloat() * 0.4f + 0.2f);
+                bd.setTransformation(initialTransform);
+            });
+
+            Vector randomOffset = new Vector(
+                    (r.nextDouble() - 0.5) * 2.5,
+                    (r.nextDouble() - 0.5) * 1.5,
+                    (r.nextDouble() - 0.5) * 2.5
+            );
+            Location finalLocation = center.clone().add(randomOffset).subtract(player.getVelocity().multiply(2.0));
+
+            Transformation finalTransform = block.getTransformation();
+            finalTransform.getScale().set(r.nextFloat() * 1.5f + 0.8f);
+            block.teleport(finalLocation);
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    if (!block.isValid()) return;
+                    block.setInterpolationDuration(10);
+                    finalTransform.getScale().set(0f);
+                    block.setTransformation(finalTransform);
+                    new BukkitRunnable() {
+                        @Override
+                        public void run() {
+                            block.remove();
+                        }
+                    }.runTaskLater(plugin, 11L);
+                }
+            }.runTaskLater(plugin, animationTicks - 10L);
         }
-        world.spawnParticle(Particle.WITCH, loc.clone().add(0, 1, 0), 5, 0.2, 0.2, 0.2, 0.05);
+
+        world.spawnParticle(
+                Particle.CLOUD,
+                center,
+                20,
+                0.8, 0.5, 0.8,
+                0.01
+        );
     }
 
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
-        // Check if the player is sneaking when they press the offhand key
-        if (!configManager.isTrimEnabled("flow")) {
-            return;
-        }
+        if (!configManager.isTrimEnabled("flow")) return;
         if (event.getPlayer().isSneaking()) {
-            // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);
-
-            // Activate the ability
             abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
@@ -185,7 +220,7 @@ public class FlowTrim implements Listener {
                 event.setCancelled(true);
             } else if (event.getCause() == EntityDamageEvent.DamageCause.FALL && player.getPersistentDataContainer().has(dashEndFallImmunityKey, PersistentDataType.BYTE)) {
                 event.setCancelled(true);
-                player.getPersistentDataContainer().remove(dashEndFallImmunityKey); // Remove the flag
+                player.getPersistentDataContainer().remove(dashEndFallImmunityKey);
             }
         }
     }

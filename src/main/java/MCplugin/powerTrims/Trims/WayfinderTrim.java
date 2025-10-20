@@ -1,38 +1,24 @@
-/*
- * This file is part of [ POWER TRIMS ].
- *
- * [POWER TRIMS] is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * [ POWER TRIMS ] is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
- *
- * Copyright (C) [2025] [ div ].
- */
-
-
-
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.config.ConfigManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
+import org.bukkit.entity.BlockDisplay;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Transformation;
+import org.bukkit.util.Vector;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -59,7 +45,7 @@ public class WayfinderTrim implements Listener {
 
 
     public void WayfinderPrimary(Player player) {
-        if (!configManager.isTrimEnabled("ward")) {
+        if (!configManager.isTrimEnabled("wayfinder")) {
             return;
         }
 
@@ -77,38 +63,115 @@ public class WayfinderTrim implements Listener {
         UUID uuid = player.getUniqueId();
         World world = player.getWorld();
 
-        // Check if a marker already exists for this player
         if (markedLocations.containsKey(uuid)) {
-            // Teleport back to the marked location and clear the marker
             Location mark = markedLocations.remove(uuid);
+            playTeleportAnimation(player.getLocation(), mark);
             player.teleport(mark);
             Messaging.sendTrimMessage(player, "Wayfinder", ChatColor.AQUA, "You have returned to your marked location!");
             player.playSound(mark, Sound.ENTITY_ENDERMAN_TELEPORT, 1.0f, 1.0f);
-            // Create a teleportation particle effect visible to all
-            world.spawnParticle(Particle.PORTAL, mark, 100, 1, 1, 1, 0.5);
-            // Set ability cooldown
             cooldownManager.setCooldown(player, TrimPattern.WAYFINDER, TELEPORT_COOLDOWN);
         } else {
-            // Mark current location without teleporting
             Location mark = player.getLocation();
             markedLocations.put(uuid, mark);
+            playMarkAnimation(mark);
             Messaging.sendTrimMessage(player, "Wayfinder", ChatColor.DARK_AQUA, "You have marked this location!");
             player.playSound(mark, Sound.BLOCK_BEACON_ACTIVATE, 1.0f, 1.0f);
-            world.spawnParticle(Particle.HAPPY_VILLAGER, mark, 50, 0.5, 0.5, 0.5, 0.1);
         }
+    }
+
+    private void playMarkAnimation(Location location) {
+        World world = location.getWorld();
+        if (world == null) return;
+
+        final List<BlockDisplay> blocks = new ArrayList<>();
+        final Material markMaterial = Material.EMERALD_BLOCK;
+        final int durationTicks = 30;
+
+        BlockDisplay centerBlock = world.spawn(location.clone().add(0, 0.5, 0), BlockDisplay.class, bd -> {
+            bd.setBlock(markMaterial.createBlockData());
+            Transformation t = bd.getTransformation();
+            t.getScale().set(0.01f);
+            bd.setTransformation(t);
+            bd.setBrightness(new BlockDisplay.Brightness(15, 15));
+        });
+        blocks.add(centerBlock);
+
+        new BukkitRunnable() {
+            int ticks = 0;
+            @Override
+            public void run() {
+                if (ticks++ > durationTicks) {
+                    blocks.forEach(Entity::remove);
+                    this.cancel();
+                    return;
+                }
+                float progress = (float) ticks / durationTicks;
+                float scale = (float) (Math.sin(progress * Math.PI) * 0.6f);
+                Transformation t = centerBlock.getTransformation();
+                t.getScale().set(scale);
+                centerBlock.setTransformation(t);
+            }
+        }.runTaskTimer(plugin, 0L, 1L);
+    }
+
+    private void playTeleportAnimation(Location from, Location to) {
+        playVortexAnimation(from, Material.PURPUR_BLOCK);
+        playVortexAnimation(to, Material.EMERALD_BLOCK);
+    }
+
+    private void playVortexAnimation(Location location, Material material) {
+        World world = location.getWorld();
+        if (world == null) return;
+
+        final List<BlockDisplay> blocks = new ArrayList<>();
+        final int durationTicks = 25;
+        final int blockCount = 30;
+
+        new BukkitRunnable() {
+            int ticks = 0;
+            @Override
+            public void run() {
+                if (ticks++ > durationTicks) {
+                    blocks.forEach(Entity::remove);
+                    this.cancel();
+                    return;
+                }
+
+                for (int i = 0; i < 2; i++) {
+                    double angle = Math.random() * 2 * Math.PI;
+                    double radius = Math.random() * 2.0;
+                    Location spawnLoc = location.clone().add(Math.cos(angle) * radius, Math.random() * 2.5, Math.sin(angle) * radius);
+                    BlockDisplay block = world.spawn(spawnLoc, BlockDisplay.class, bd -> {
+                        bd.setBlock(material.createBlockData());
+                        Transformation t = bd.getTransformation();
+                        t.getScale().set(0.3f);
+                        bd.setTransformation(t);
+                    });
+                    blocks.add(block);
+                }
+
+                blocks.removeIf(block -> {
+                    if (!block.isValid()) return true;
+                    Vector toCenter = location.toVector().subtract(block.getLocation().toVector()).normalize().multiply(0.25);
+                    block.teleport(block.getLocation().add(toCenter));
+                    if (block.getLocation().distanceSquared(location) < 1.0) {
+                        block.remove();
+                        return true;
+                    }
+                    return false;
+                });
+            }
+        }.runTaskTimer(plugin, 0L, 1L);
     }
 
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
-        // Check if the player is sneaking when they press the offhand key
         if (!configManager.isTrimEnabled("wayfinder")) {
             return;
         }
         if (event.getPlayer().isSneaking()) {
-            // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);
 
-            // Activate the ability
             abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }

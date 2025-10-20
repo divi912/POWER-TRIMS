@@ -3,8 +3,12 @@
 
 rituals:
   SILENCE:
+    # Set to false to disable this specific upgrade ritual.
+    enabled: true
     # Duration of the ritual in seconds.
     duration: 10
+    # Maximum number of times this armor set can be created. Set to -1 for no limit.
+    limit: 1
     # List of materials required for the ritual, in the format 'MATERIAL_NAME:AMOUNT'.
     materials:
       - 'DIAMOND_BLOCK:1'

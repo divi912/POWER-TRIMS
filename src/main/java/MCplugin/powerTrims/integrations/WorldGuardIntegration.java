@@ -41,7 +41,6 @@ public class WorldGuardIntegration {
         RegionContainer container = WorldGuard.getInstance().getPlatform().getRegionContainer();
         RegionQuery query = container.createQuery();
 
-        // THE FIX: Use WorldGuardPlugin.inst().wrapPlayer(player) for the second argument
         return query.testState(
                 BukkitAdapter.adapt(player.getLocation()),
                 WorldGuardPlugin.inst().wrapPlayer(player),

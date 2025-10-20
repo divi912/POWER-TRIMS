@@ -4,6 +4,8 @@ import MCplugin.powerTrims.config.ConfigManager;
 import com.jeff_media.armorequipevent.ArmorEquipEvent;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.Registry;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -16,6 +18,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,55 +38,57 @@ public class TrimEffectManager implements Listener {
     }
 
     private void registerPassiveEffects() {
-        passiveEffects.put(TrimPattern.SILENCE, List.of(
-                new PotionEffect(PotionEffectType.STRENGTH, INFINITE_DURATION, 1, true, false, true)
-        ));
-        passiveEffects.put(TrimPattern.VEX, List.of(
-                new PotionEffect(PotionEffectType.SPEED, INFINITE_DURATION, 1, true, false, true)
-        ));
-        passiveEffects.put(TrimPattern.SNOUT, List.of(
-                new PotionEffect(PotionEffectType.STRENGTH, INFINITE_DURATION, 0, true, false, true)
-        ));
-        passiveEffects.put(TrimPattern.COAST, List.of(
-                new PotionEffect(PotionEffectType.DOLPHINS_GRACE, INFINITE_DURATION, 0, true, false, true)
-        ));
-        passiveEffects.put(TrimPattern.WILD, List.of(
-                new PotionEffect(PotionEffectType.REGENERATION, INFINITE_DURATION, 0, true, false, true)
-        ));
-        passiveEffects.put(TrimPattern.TIDE, List.of(
-                new PotionEffect(PotionEffectType.DOLPHINS_GRACE, INFINITE_DURATION, 2, true, false, true)
-        ));
-        passiveEffects.put(TrimPattern.DUNE, List.of(
-                new PotionEffect(PotionEffectType.HASTE, INFINITE_DURATION, 0, true, false, true),
-                new PotionEffect(PotionEffectType.FIRE_RESISTANCE, INFINITE_DURATION, 0, true, false, true)
-        ));
-        passiveEffects.put(TrimPattern.EYE, List.of(
-                new PotionEffect(PotionEffectType.NIGHT_VISION, INFINITE_DURATION, 0, true, false, true)
-        ));
-        passiveEffects.put(TrimPattern.WARD, List.of(
-                new PotionEffect(PotionEffectType.RESISTANCE, INFINITE_DURATION, 0, true, false, true)
-        ));
-        passiveEffects.put(TrimPattern.SENTRY, List.of(
-                new PotionEffect(PotionEffectType.RESISTANCE, INFINITE_DURATION, 0, true, false, true)
-        ));
-        passiveEffects.put(TrimPattern.SPIRE, List.of(
-                new PotionEffect(PotionEffectType.SPEED, INFINITE_DURATION, 1, true, false, true)
-        ));
-        passiveEffects.put(TrimPattern.RIB, List.of(
-                new PotionEffect(PotionEffectType.RESISTANCE,INFINITE_DURATION, 0, true, false, true)
-        ));
-        passiveEffects.put(TrimPattern.BOLT, List.of(
-                new PotionEffect(PotionEffectType.SPEED,INFINITE_DURATION, 2, true, false, true)
-        ));
-        passiveEffects.put(TrimPattern.FLOW, List.of(
-                new PotionEffect(PotionEffectType.SPEED, INFINITE_DURATION, 1, true, false, true)
-        ));
+        ConfigurationSection passiveEffectsSection = configManager.getConfig().getConfigurationSection("passive_effects");
+        if (passiveEffectsSection == null) return;
+
+        for (String trimName : passiveEffectsSection.getKeys(false)) {
+            TrimPattern pattern = getTrimPatternFromString(trimName);
+            if (pattern == null) {
+                plugin.getLogger().warning("Invalid trim pattern in passive_effects: " + trimName);
+                continue;
+            }
+
+            List<PotionEffect> effects = new ArrayList<>();
+            List<String> effectStrings = passiveEffectsSection.getStringList(trimName);
+
+            if (effectStrings.isEmpty() || (effectStrings.size() == 1 && effectStrings.get(0).equalsIgnoreCase("none"))) {
+                passiveEffects.put(pattern, new ArrayList<>()); // No effects for this trim
+                continue;
+            }
+
+            for (String effectString : effectStrings) {
+                try {
+                    String[] parts = effectString.split(":");
+                    if (parts.length != 2) {
+                        plugin.getLogger().warning("Invalid effect format in passive_effects for trim '" + trimName + "': " + effectString);
+                        continue;
+                    }
+                    PotionEffectType effectType = PotionEffectType.getByName(parts[0].toUpperCase());
+                    int amplifier = Integer.parseInt(parts[1]);
+
+                    if (effectType == null) {
+                        plugin.getLogger().warning("Invalid potion effect type '" + parts[0] + "' for trim '" + trimName + "'.");
+                        continue;
+                    }
+
+                    effects.add(new PotionEffect(effectType, INFINITE_DURATION, amplifier, true, false, true));
+                } catch (NumberFormatException e) {
+                    plugin.getLogger().warning("Invalid amplifier in passive_effects for trim '" + trimName + "': " + effectString);
+                }
+            }
+            passiveEffects.put(pattern, effects);
+        }
     }
 
-    /**
-     * Removes all passive effects that were applied by this plugin.
-     * It checks for metadata to ensure it doesn't remove effects from other sources.
-     */
+    private TrimPattern getTrimPatternFromString(String patternName) {
+        for (TrimPattern pattern : Registry.TRIM_PATTERN) {
+            if (pattern.getKey().getKey().equalsIgnoreCase(patternName)) {
+                return pattern;
+            }
+        }
+        return null;
+    }
+
     private void removeOwnedEffects(Player player) {
         for (List<PotionEffect> effects : passiveEffects.values()) {
             for (PotionEffect effect : effects) {
@@ -96,24 +101,16 @@ public class TrimEffectManager implements Listener {
         }
     }
 
-    /**
-     * Applies trim effects based on the player's currently equipped armor.
-     * This method first removes any old effects owned by the plugin, then applies new ones.
-     */
     public void applyTrimEffects(Player player) {
-        // First, remove any effects this plugin is currently responsible for.
         removeOwnedEffects(player);
 
-        // Now, determine what new effects to apply based on current gear.
         TrimPattern equipped = ArmourChecking.getEquippedTrim(player);
 
         if (equipped != null && passiveEffects.containsKey(equipped)) {
             String trimName = equipped.getKey().getKey();
             if (configManager.isTrimEnabled(trimName)) {
                 for (PotionEffect effect : passiveEffects.get(equipped)) {
-                    // Apply the new effect
                     player.addPotionEffect(effect);
-                    // And "claim" it by setting metadata so we know to remove it later
                     String metadataKey = "powertrims-effect-" + effect.getType().getName();
                     player.setMetadata(metadataKey, new FixedMetadataValue(plugin, true));
                 }
@@ -129,20 +126,17 @@ public class TrimEffectManager implements Listener {
     @EventHandler
     public void onMilkDrink(PlayerItemConsumeEvent event) {
         if (event.getItem().getType() == Material.MILK_BUCKET) {
-            // Re-apply effects after a short delay to allow the milk to clear them first
             Bukkit.getScheduler().runTaskLater(plugin, () -> applyTrimEffects(event.getPlayer()), 1L);
         }
     }
 
     @EventHandler
     public void onRespawn(PlayerRespawnEvent event) {
-        // Delay to ensure the player is fully loaded
         Bukkit.getScheduler().runTaskLater(plugin, () -> applyTrimEffects(event.getPlayer()), 40L);
     }
 
     @EventHandler
     public void onArmorEquip(ArmorEquipEvent event) {
-        // Delay to ensure the event is fully processed
         Bukkit.getScheduler().runTaskLater(plugin, () -> applyTrimEffects(event.getPlayer()), 1L);
     }
 }

@@ -1,5 +1,6 @@
 package MCplugin.powerTrims.UltimateUpgrader;
 
+import MCplugin.powerTrims.config.ConfigManager;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -12,13 +13,16 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.PrepareSmithingEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.SmithingInventory;
 import org.bukkit.inventory.meta.ArmorMeta;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.trim.ArmorTrim;
 import org.bukkit.inventory.meta.trim.TrimPattern;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 
@@ -31,6 +35,7 @@ public class UltimateUpgraderManager implements Listener, CommandExecutor, Inven
 
     private final RitualManager ritualManager;
     private final String GUI_NAME = "§5Ultimate Upgrader";
+    private final NamespacedKey upgradeKey;
 
     private static final int HELMET_SLOT = 10;
     private static final int CHESTPLATE_SLOT = 12;
@@ -39,8 +44,9 @@ public class UltimateUpgraderManager implements Listener, CommandExecutor, Inven
     private static final int UPGRADE_BUTTON_SLOT = 22;
     private static final Set<Integer> ARMOR_SLOTS = new HashSet<>(Arrays.asList(HELMET_SLOT, CHESTPLATE_SLOT, LEGGINGS_SLOT, BOOTS_SLOT));
 
-    public UltimateUpgraderManager(JavaPlugin plugin, RitualManager ritualManager, NamespacedKey upgradeKey) {
+    public UltimateUpgraderManager(JavaPlugin plugin, RitualManager ritualManager, NamespacedKey upgradeKey, ConfigManager configManager) {
         this.ritualManager = ritualManager;
+        this.upgradeKey = upgradeKey;
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
         PluginCommand command = plugin.getCommand("upgrade");
         if (command != null) {
@@ -65,19 +71,16 @@ public class UltimateUpgraderManager implements Listener, CommandExecutor, Inven
     private void openUpgradeGUI(Player player) {
         Inventory gui = Bukkit.createInventory(this, 27, GUI_NAME);
 
-        // Create and set the background placeholder
         ItemStack placeholder = createGuiItem(Material.GRAY_STAINED_GLASS_PANE, " ");
         for (int i = 0; i < gui.getSize(); i++) {
             gui.setItem(i, placeholder);
         }
 
-        // Clear the armor slots to make them empty
         gui.setItem(HELMET_SLOT, null);
         gui.setItem(CHESTPLATE_SLOT, null);
         gui.setItem(LEGGINGS_SLOT, null);
         gui.setItem(BOOTS_SLOT, null);
 
-        // Set the upgrade button
         gui.setItem(UPGRADE_BUTTON_SLOT, createGuiItem(Material.AMETHYST_SHARD, "§d§lInitiate Ritual", "§7Place a full set of armor with a", "§7valid trim to begin the ritual."));
 
         player.openInventory(gui);
@@ -85,25 +88,52 @@ public class UltimateUpgraderManager implements Listener, CommandExecutor, Inven
 
     @Override
     public @NotNull Inventory getInventory() {
-        return null; // This is a holder, it doesn't have a single inventory to return.
+        return null;
     }
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
-        if (!(event.getInventory().getHolder() instanceof UltimateUpgraderManager)) return;
-        if (!(event.getWhoClicked() instanceof Player player)) return;
-
-        int slot = event.getRawSlot();
-
-        if (event.getClickedInventory() != null && event.getClickedInventory().getHolder() instanceof UltimateUpgraderManager) {
-            if (!ARMOR_SLOTS.contains(slot) && slot != UPGRADE_BUTTON_SLOT) {
-                event.setCancelled(true);
-            }
+        if (!(event.getView().getTopInventory().getHolder() instanceof UltimateUpgraderManager)) {
+            return;
+        }
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
         }
 
-        if (slot == UPGRADE_BUTTON_SLOT) {
+        Inventory clickedInventory = event.getClickedInventory();
+        int rawSlot = event.getRawSlot();
+
+        if (event.getView().getTopInventory().equals(clickedInventory)) {
+            if (ARMOR_SLOTS.contains(rawSlot)) {
+                return;
+            }
+
+            if (rawSlot == UPGRADE_BUTTON_SLOT) {
+                event.setCancelled(true);
+                initiateRitual(player, event.getView().getTopInventory());
+                return;
+            }
+
             event.setCancelled(true);
-            initiateRitual(player, event.getInventory());
+        } else if (event.isShiftClick() && clickedInventory != null && clickedInventory.equals(event.getView().getBottomInventory())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onSmithing(PrepareSmithingEvent event) {
+        SmithingInventory inventory = event.getInventory();
+        if (inventory == null) return;
+
+        ItemStack armorPiece = inventory.getItem(1);
+
+        if (armorPiece == null || armorPiece.getType() == Material.AIR) {
+            return;
+        }
+
+        ItemMeta meta = armorPiece.getItemMeta();
+        if (meta != null && meta.getPersistentDataContainer().has(upgradeKey, PersistentDataType.BYTE)) {
+            event.setResult(null);
         }
     }
 
@@ -116,6 +146,12 @@ public class UltimateUpgraderManager implements Listener, CommandExecutor, Inven
                 player.sendMessage("§cPlease place a full, trimmed armor set in the slots.");
                 return;
             }
+
+            if (armorMeta.getPersistentDataContainer().has(upgradeKey, PersistentDataType.BYTE)) {
+                player.sendMessage("§cThis armor piece has already been upgraded and cannot be modified further.");
+                return;
+            }
+
             ArmorTrim trim = armorMeta.getTrim();
             if (trim == null) {
                 player.sendMessage("§cAn armor piece is missing a trim.");
@@ -135,9 +171,18 @@ public class UltimateUpgraderManager implements Listener, CommandExecutor, Inven
             return;
         }
 
+        if (!config.isEnabled()) {
+            player.sendMessage("§cThe upgrade ritual for this trim pattern is currently disabled.");
+            return;
+        }
+
+        if (config.getLimit() >= 0 && ritualManager.getUpgradeCount(pattern) >= config.getLimit()) {
+            player.sendMessage("§cThe maximum number of upgrades for this armor set has been reached.");
+            return;
+        }
+
         if (!hasRequiredMaterials(player, config.getMaterials())) {
             player.sendMessage("§cYou lack the required materials for this ritual.");
-            // Optionally, list the required materials
             return;
         }
 

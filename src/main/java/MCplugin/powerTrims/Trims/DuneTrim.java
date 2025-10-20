@@ -1,30 +1,11 @@
-/*
- * This file is part of [ POWER TRIMS ].
- *
- * [POWER TRIMS] is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * [ POWER TRIMS ] is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
- *
- * Copyright (C) [2025] [ div ].
- */
-
-
-
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.config.ConfigManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
+import org.bukkit.block.Block;
+import org.bukkit.entity.BlockDisplay;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -33,122 +14,153 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
+import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class DuneTrim implements Listener {
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
-    private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
+    private final PersistentTrustManager trustManager;
     private final ConfigManager configManager;
     private final AbilityManager abilityManager;
-    private final NamespacedKey effectKey;
-    private final int SANDSTORM_RADIUS;
-    private final int SANDSTORM_DAMAGE;
-    private final long SANDSTORM_COOLDOWN;
+    private final long TORNADO_COOLDOWN;
+    private final int TORNADO_DURATION;
+    private final double TORNADO_HEIGHT;
+    private final double PULL_STRENGTH;
+    private final double LIFT_STRENGTH;
+    private final double DAMAGE_PER_SECOND;
+
+    private static final List<Material> SAND_MATERIALS = List.of(
+            Material.SAND, Material.SANDSTONE, Material.RED_SAND, Material.SMOOTH_SANDSTONE, Material.CUT_SANDSTONE
+    );
+
+    private record TornadoParticle(BlockDisplay display, double height, double radius, double speed, double startAngle) {}
 
     public DuneTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
-        this.trustManager = trustManager; // Initialize the Trust Manager
+        this.trustManager = trustManager;
         this.configManager = configManager;
         this.abilityManager = abilityManager;
-        this.effectKey = new NamespacedKey(plugin, "dune_trim_effect");
 
-        SANDSTORM_RADIUS = configManager.getInt("dune.primary.sandstorm_radius");
-        SANDSTORM_DAMAGE = configManager.getInt("dune.primary.sandstorm_damage");
-        SANDSTORM_COOLDOWN = configManager.getLong("dune.primary.cooldown");
+        TORNADO_COOLDOWN = configManager.getLong("dune.primary.cooldown");
+        TORNADO_DURATION = configManager.getInt("dune.primary.duration");
+        TORNADO_HEIGHT = configManager.getDouble("dune.primary.height");
+        PULL_STRENGTH = configManager.getDouble("dune.primary.pull_strength");
+        LIFT_STRENGTH = configManager.getDouble("dune.primary.lift_strength");
+        DAMAGE_PER_SECOND = configManager.getDouble("dune.primary.damage_per_second");
 
-        abilityManager.registerPrimaryAbility(TrimPattern.DUNE, this::DunePrimary);
+        abilityManager.registerPrimaryAbility(TrimPattern.DUNE, this::dunePrimary);
+        plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
-
-    private void createExpandingEffect(Player player) {
-        // Center the effect at roughly the player's mid-body
-        Location center = player.getLocation().clone().add(0, player.getEyeHeight() / 2, 0);
-        World world = player.getWorld();
-
-        // Enhanced swirling, expanding particle effect
-        int layers = 15;
-        double timeOffset = (System.currentTimeMillis() % 3600) / 3600.0 * 2 * Math.PI;
-        for (int i = 1; i <= layers; i++) {
-            double radius = i * 0.4;
-            double yOffset = i * 0.15;
-            int particleCount = (int)(2 * Math.PI * radius * 6);
-            for (int j = 0; j < particleCount; j++) {
-                double angle = (2 * Math.PI / particleCount) * j + timeOffset;
-                double offsetX = Math.cos(angle) * radius;
-                double offsetZ = Math.sin(angle) * radius;
-                Location particleLoc = center.clone().add(offsetX, yOffset, offsetZ);
-                world.spawnParticle(Particle.FALLING_DUST, particleLoc, 1, 0, 0, 0, 0, Material.SAND.createBlockData());
-            }
-        }
-
-        for (int k = 0; k < 50; k++) {
-            double angle = Math.random() * 2 * Math.PI;
-            double distance = Math.random();
-            double offsetX = Math.cos(angle) * distance;
-            double offsetZ = Math.sin(angle) * distance;
-            Location burstLoc = center.clone().add(offsetX, Math.random(), offsetZ);
-            world.spawnParticle(Particle.CRIT, burstLoc, 1, 0, 0, 0, 0);
-        }
-    }
-
-    public void DunePrimary(Player player) {
-        if (!configManager.isTrimEnabled("dune")) {
-            return;
-        }
-        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.DUNE)) {
-            return;
-        }
-        if (cooldownManager.isOnCooldown(player, TrimPattern.DUNE)) {
-            return;
-        }
-        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
+    public void dunePrimary(Player player) {
+        if (!configManager.isTrimEnabled("dune")) return;
+        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.DUNE)) return;
+        if (cooldownManager.isOnCooldown(player, TrimPattern.DUNE)) return;
+        if (Bukkit.getPluginManager().isPluginEnabled("WorldGuard") && !WorldGuardIntegration.canUseAbilities(player)) {
             Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
 
-        Location playerLoc = player.getLocation();
-        World world = player.getWorld();
-        Player duneUser = player; // Store the player using the ability
-
-        // Play sound effects for activation
-        world.playSound(playerLoc, Sound.ENTITY_PLAYER_BREATH, 1.0f, 0.8f);
-        world.playSound(playerLoc, Sound.ENTITY_HUSK_AMBIENT, 1.0f, 1.0f);
-
-        // Call the enhanced expanding particle effect
-        createExpandingEffect(player);
-
-        // Additional effects:
-        world.spawnParticle(Particle.FALLING_DUST, playerLoc.clone().add(0, 0.1, 0), 80, 0.7, 1.2, 0.7, 0.1, Material.SAND.createBlockData());
-        world.spawnParticle(Particle.CAMPFIRE_COSY_SMOKE, playerLoc.clone().add(0, 0.1, 0), 40, 0.7, 1.2, 0.7, 0.1);
-        world.spawnParticle(Particle.CLOUD, playerLoc.clone().add(0, 1.5, 0), 60, 1.0, 0.6, 1.0, 0.1);
-
-        for (Entity entity : world.getNearbyEntities(playerLoc, SANDSTORM_RADIUS, SANDSTORM_RADIUS, SANDSTORM_RADIUS)) {
-            if (entity instanceof LivingEntity target && !target.equals(duneUser)) {
-                if (target instanceof Player targetPlayer && trustManager.isTrusted(duneUser.getUniqueId(), targetPlayer.getUniqueId())) {
-                    continue; // Skip trusted players
-                }
-                Location targetLoc = target.getLocation();
-                Vector knockbackDirection = targetLoc.toVector().subtract(playerLoc.toVector()).normalize().multiply(1.5);
-                knockbackDirection.add(new Vector(0, 0.5, 0));
-                target.setVelocity(knockbackDirection);
-
-                target.damage(SANDSTORM_DAMAGE);
-                target.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 200, 0)); // 3 seconds of blindness
-                target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 200, 1)); // 4 seconds of slowness
-
-                world.spawnParticle(Particle.FALLING_DUST, target.getLocation().add(0, 1, 0), 20, 0.5, 0.5, 0.5, 0.05, Material.SAND.createBlockData());
-            }
+        Block targetBlock = player.getTargetBlockExact(30, FluidCollisionMode.NEVER);
+        if (targetBlock == null) {
+            Messaging.sendError(player, "You must be looking at the ground to summon the tornado.");
+            return;
         }
 
-        player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 600, 1));
-        player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 600, 1));
+        cooldownManager.setCooldown(player, TrimPattern.DUNE, TORNADO_COOLDOWN);
+        Messaging.sendTrimMessage(player, "Dune", ChatColor.GOLD, "You have used dune ability!");
+        startTornadoTask(player, targetBlock.getLocation().add(0.5, 1.0, 0.5));
+    }
 
-        cooldownManager.setCooldown(player, TrimPattern.DUNE, SANDSTORM_COOLDOWN);
-        Messaging.sendTrimMessage(player, "Dune", ChatColor.GOLD, "You have unleashed a " + ChatColor.GOLD + "Sandstorm" + ChatColor.GRAY + "!");
+    private void startTornadoTask(Player owner, Location initialLocation) {
+        final World world = initialLocation.getWorld();
+        if (world == null) return;
+
+        final List<TornadoParticle> particles = new ArrayList<>();
+        final int particleCount = 150;
+
+        for (int i = 0; i < particleCount; i++) {
+            ThreadLocalRandom r = ThreadLocalRandom.current();
+            BlockDisplay display = world.spawn(initialLocation, BlockDisplay.class, bd -> {
+                bd.setBlock(SAND_MATERIALS.get(r.nextInt(SAND_MATERIALS.size())).createBlockData());
+                bd.setInterpolationDuration(5);
+                bd.setInterpolationDelay(-1);
+            });
+
+            double height = r.nextDouble(TORNADO_HEIGHT);
+            double radius = height * 0.4 + 1.5;
+            if (radius > 5.0) radius = 5.0;
+
+            particles.add(new TornadoParticle(
+                    display,
+                    height,
+                    radius,
+                    r.nextDouble(20, 40) * (r.nextBoolean() ? 1 : -1),
+                    r.nextDouble(360)
+            ));
+        }
+
+        BukkitRunnable tornadoTask = new BukkitRunnable() {
+            private int ticksElapsed = 0;
+            private final Location tornadoLocation = initialLocation.clone();
+            private final Vector moveDirection = owner.getEyeLocation().getDirection().setY(0).normalize().multiply(0.5);
+
+            @Override
+            public void run() {
+                if (ticksElapsed >= TORNADO_DURATION || !owner.isValid()) {
+                    this.cancel();
+                    return;
+                }
+                ThreadLocalRandom r = ThreadLocalRandom.current();
+                Vector wobble = new Vector(r.nextDouble() - 0.5, 0, r.nextDouble() - 0.5).multiply(0.4);
+                tornadoLocation.add(moveDirection.clone().add(wobble));
+                tornadoLocation.setY(world.getHighestBlockYAt(tornadoLocation) + 1.0);
+                for (Entity entity : world.getNearbyEntities(tornadoLocation, 8, TORNADO_HEIGHT, 8)) {
+                    if (entity instanceof LivingEntity target && !entity.equals(owner) && !(entity instanceof Player p && trustManager.isTrusted(owner.getUniqueId(), p.getUniqueId()))) {
+                        Vector pull = tornadoLocation.toVector().subtract(target.getLocation().toVector()).normalize().multiply(PULL_STRENGTH);
+                        Vector lift = new Vector(0, LIFT_STRENGTH, 0);
+                        target.setVelocity(pull.add(lift));
+                        if (ticksElapsed % 20 == 0) target.damage(DAMAGE_PER_SECOND, owner);
+                    }
+                }
+
+                for (TornadoParticle particle : particles) {
+                    if (!particle.display.isValid()) continue;
+                    double angle = Math.toRadians(particle.startAngle + (ticksElapsed * particle.speed));
+
+                    Location particleLoc = tornadoLocation.clone().add(
+                            Math.cos(angle) * particle.radius,
+                            particle.height,
+                            Math.sin(angle) * particle.radius
+                    );
+
+                    Transformation t = particle.display.getTransformation();
+                    t.getScale().set(r.nextFloat() * 0.8f + 0.2f);
+
+                    particle.display.teleport(particleLoc);
+                    particle.display.setTransformation(t);
+                }
+
+                world.playSound(tornadoLocation, Sound.ENTITY_BREEZE_IDLE_AIR, 0.8f, (float)(1.5 + r.nextDouble() * 0.2));
+                ticksElapsed += 4;
+            }
+
+            @Override
+            public synchronized void cancel() throws IllegalStateException {
+                super.cancel();
+                world.playSound(tornadoLocation, Sound.ENTITY_WARDEN_SONIC_BOOM, 1.5f, 1.0f);
+                for (TornadoParticle particle : particles) {
+                    if (particle.display.isValid()) particle.display.remove();
+                }
+            }
+        };
+        tornadoTask.runTaskTimer(plugin, 0L, 4L);
     }
 
     @EventHandler

@@ -12,6 +12,7 @@ import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -24,11 +25,14 @@ public class RitualManager {
     private final NamespacedKey upgradeKey;
     private final Map<TrimPattern, RitualConfig> ritualConfigs = new HashMap<>();
     private final Map<UUID, Ritual> activeRituals = new HashMap<>();
+    private FileConfiguration upgradeCountsConfig;
+    private File upgradeCountsFile;
 
     public RitualManager(JavaPlugin plugin, NamespacedKey upgradeKey) {
         this.plugin = plugin;
         this.upgradeKey = upgradeKey;
         loadRituals();
+        loadUpgradeCounts();
     }
 
     public void loadRituals() {
@@ -51,7 +55,9 @@ public class RitualManager {
                     continue;
                 }
 
+                boolean enabled = ritualsSection.getBoolean(key + ".enabled", true);
                 int duration = ritualsSection.getInt(key + ".duration");
+                int limit = ritualsSection.getInt(key + ".limit", -1);
                 List<ItemStack> materials = new ArrayList<>();
                 for (String materialString : ritualsSection.getStringList(key + ".materials")) {
                     String[] parts = materialString.split(":");
@@ -59,10 +65,36 @@ public class RitualManager {
                     int amount = Integer.parseInt(parts[1]);
                     materials.add(new ItemStack(material, amount));
                 }
-                ritualConfigs.put(pattern, new RitualConfig(duration, materials));
+                ritualConfigs.put(pattern, new RitualConfig(duration, materials, limit, enabled));
             } catch (IllegalArgumentException e) {
                 plugin.getLogger().warning("Invalid material in rituals.yml for trim '" + key + "': " + e.getMessage());
             }
+        }
+    }
+
+    private void loadUpgradeCounts() {
+        upgradeCountsFile = new File(plugin.getDataFolder(), "upgrade_counts.yml");
+        if (!upgradeCountsFile.exists()) {
+            try {
+                upgradeCountsFile.createNewFile();
+            } catch (IOException e) {
+                plugin.getLogger().severe("Could not create upgrade_counts.yml!");
+            }
+        }
+        upgradeCountsConfig = YamlConfiguration.loadConfiguration(upgradeCountsFile);
+    }
+
+    public int getUpgradeCount(TrimPattern pattern) {
+        return upgradeCountsConfig.getInt(pattern.getKey().getKey(), 0);
+    }
+
+    public void incrementUpgradeCount(TrimPattern pattern) {
+        int currentCount = getUpgradeCount(pattern);
+        upgradeCountsConfig.set(pattern.getKey().getKey(), currentCount + 1);
+        try {
+            upgradeCountsConfig.save(upgradeCountsFile);
+        } catch (IOException e) {
+            plugin.getLogger().severe("Could not save upgrade_counts.yml!");
         }
     }
 
@@ -75,7 +107,7 @@ public class RitualManager {
     }
 
     public void startRitual(Player player, ItemStack[] armorSet, RitualConfig config) {
-        Ritual ritual = new Ritual(plugin, player, player.getLocation(), armorSet, config.getMaterials(), config.getDuration(), this, upgradeKey);
+        Ritual ritual = new Ritual(plugin, player, player.getLocation(), armorSet, config, this, upgradeKey);
         activeRituals.put(player.getUniqueId(), ritual);
         ritual.start();
     }

@@ -1,30 +1,11 @@
-/*
- * This file is part of [ POWER TRIMS ].
- *
- * [POWER TRIMS] is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * [ POWER TRIMS ] is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
- *
- * Copyright (C) [2025] [ div ].
- */
-
-
-
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.*;
 import MCplugin.powerTrims.config.ConfigManager;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import org.bukkit.*;
+import org.bukkit.entity.BlockDisplay;
+import org.bukkit.entity.Display;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -36,11 +17,12 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
+import org.joml.AxisAngle4f;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class SilenceTrim implements Listener {
     private final JavaPlugin plugin;
@@ -49,7 +31,6 @@ public class SilenceTrim implements Listener {
     private final ConfigManager configManager;
     private final AbilityManager abilityManager;
 
-    // --- STATE & CONSTANTS ---
     private final Map<UUID, Long> wardensEchoCooldowns = new HashMap<>();
 
     private final long WARDENS_ECHO_COOLDOWN_MS;
@@ -60,6 +41,9 @@ public class SilenceTrim implements Listener {
     private final int ECHO_EFFECT_DURATION_TICKS;
     private final int MAX_AFFECTED_ENTITIES;
     private final long PRIMARY_COOLDOWN;
+    private static final List<Material> SCULK_MATERIALS = List.of(
+            Material.SCULK, Material.SCULK_VEIN, Material.SCULK_CATALYST, Material.DEEPSLATE
+    );
 
     public SilenceTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
@@ -68,7 +52,6 @@ public class SilenceTrim implements Listener {
         this.configManager = configManager;
         this.abilityManager = abilityManager;
 
-        // Read values from the now-centralized config
         WARDENS_ECHO_COOLDOWN_MS = configManager.getLong("silence.passive.cooldown");
         PRIMARY_RADIUS = configManager.getDouble("silence.primary.radius");
         POTION_DURATION_TICKS = configManager.getInt("silence.primary.potion_duration_ticks");
@@ -92,43 +75,310 @@ public class SilenceTrim implements Listener {
 
     public void activateSilencePrimary(Player player) {
         if (!configManager.isTrimEnabled("silence")) return;
-
-        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.SILENCE) ||
-                cooldownManager.isOnCooldown(player, TrimPattern.SILENCE)) {
-            return;
-        }
-
-        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
+        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.SILENCE) || cooldownManager.isOnCooldown(player, TrimPattern.SILENCE)) return;
+        if (Bukkit.getPluginManager().isPluginEnabled("WorldGuard") && !WorldGuardIntegration.canUseAbilities(player)) {
             Messaging.sendError(player, "You cannot use this ability in the current region.");
             return;
         }
 
-        Location playerLocation = player.getLocation();
+        cooldownManager.setCooldown(player, TrimPattern.SILENCE, PRIMARY_COOLDOWN);
+        Messaging.sendTrimMessage(player, "Silence", ChatColor.RED, "You have unleashed the Warden's Grasp!");
 
-        createWardenShockwave(playerLocation, PRIMARY_RADIUS);
-
-        player.getWorld().playSound(playerLocation, Sound.ENTITY_WARDEN_ANGRY, 2.0f, 1.5f);
-        player.getWorld().playSound(playerLocation, Sound.ENTITY_WARDEN_HEARTBEAT, 2.0f, 1.5f);
-
+        List<LivingEntity> targets = new ArrayList<>();
         int affectedCount = 0;
-        for (LivingEntity target : player.getWorld().getNearbyLivingEntities(playerLocation, PRIMARY_RADIUS)) {
+        for (LivingEntity target : player.getWorld().getNearbyLivingEntities(player.getLocation(), PRIMARY_RADIUS)) {
             if (affectedCount >= MAX_AFFECTED_ENTITIES) break;
-            if (target.equals(player)) continue;
-
-            if (target instanceof Player targetPlayer) {
-                if (trustManager.isTrusted(player.getUniqueId(), targetPlayer.getUniqueId())) {
-                    continue;
-                }
-                targetPlayer.setCooldown(Material.ENDER_PEARL, PEARL_COOLDOWN_TICKS);
-                sendMessages(targetPlayer);
-            }
-
-            applyPrimaryEffects(target);
+            if (target.equals(player) || (target instanceof Player p && trustManager.isTrusted(player.getUniqueId(), p.getUniqueId()))) continue;
+            targets.add(target);
             affectedCount++;
         }
 
-        Messaging.sendTrimMessage(player, "Silence", ChatColor.RED, "You have unleashed the Warden's Roar!");
-        cooldownManager.setCooldown(player, TrimPattern.SILENCE, PRIMARY_COOLDOWN);
+        playBackTentaclesAnimation(player);
+
+        if (!targets.isEmpty()) {
+            playSculkTentacleAnimation(player, targets);
+        } else {
+            playGroundShockwave(player, PRIMARY_RADIUS);
+            player.getWorld().playSound(player.getLocation(), Sound.ENTITY_WARDEN_ANGRY, 1.5f, 1.8f);
+        }
+    }
+
+    private void playBackTentaclesAnimation(Player player) {
+        final int TENTACLE_COUNT = 5;
+        final int SEGMENTS_PER_TENTACLE = 8;
+        final double SEGMENT_LENGTH = 0.25;
+        final int DURATION_TICKS = 60;
+        final List<List<BlockDisplay>> allTentacles = new ArrayList<>();
+
+        for (int i = 0; i < TENTACLE_COUNT; i++) {
+            List<BlockDisplay> currentTentacle = new ArrayList<>();
+            for (int j = 0; j < SEGMENTS_PER_TENTACLE; j++) {
+                int finalJ = j;
+                BlockDisplay segment = player.getWorld().spawn(player.getLocation(), BlockDisplay.class, bd -> {
+                    bd.setBlock(Material.SCULK.createBlockData());
+                    bd.setInterpolationDuration(1);
+                    bd.setInterpolationDelay(-1);
+                    Transformation t = bd.getTransformation();
+                    t.getScale().set(0.2f - (finalJ * 0.01f));
+                    bd.setTransformation(t);
+                });
+                currentTentacle.add(segment);
+            }
+            allTentacles.add(currentTentacle);
+        }
+
+        new BukkitRunnable() {
+            private int ticks = 0;
+
+            @Override
+            public void run() {
+                if (ticks++ > DURATION_TICKS || !player.isValid()) {
+                    this.cancel();
+                    allTentacles.forEach(tentacle -> tentacle.forEach(BlockDisplay::remove));
+                    return;
+                }
+
+                Vector backDir = player.getLocation().getDirection().clone().multiply(-1);
+                Vector sideDir = backDir.clone().crossProduct(new Vector(0, 1, 0)).normalize();
+                Location anchor = player.getLocation().add(backDir.multiply(0.4)).add(0, 1.2, 0);
+
+                for (int i = 0; i < allTentacles.size(); i++) {
+                    double horizontalOffset = (i - (TENTACLE_COUNT - 1) / 2.0) * 0.3;
+                    Location currentAnchor = anchor.clone().add(sideDir.clone().multiply(horizontalOffset));
+                    Vector previousSegmentPos = currentAnchor.toVector();
+                    List<BlockDisplay> currentTentacle = allTentacles.get(i);
+
+                    for (int j = 0; j < currentTentacle.size(); j++) {
+                        BlockDisplay segment = currentTentacle.get(j);
+                        if (!segment.isValid()) continue;
+
+                        Vector dir = player.getLocation().getDirection().clone().multiply(-1);
+                        double wave = Math.sin(ticks * 0.3 + i * 1.5 + j * 0.5) * 0.6;
+                        dir.add(sideDir.clone().multiply(wave * 0.5));
+                        dir.setY(dir.getY() + Math.cos(ticks * 0.2 + i) * 0.4 - (j * 0.05));
+
+                        Vector newPos = previousSegmentPos.clone().add(dir.normalize().multiply(SEGMENT_LENGTH));
+                        segment.teleport(newPos.toLocation(player.getWorld()));
+                        previousSegmentPos = newPos;
+                    }
+                }
+            }
+        }.runTaskTimer(plugin, 0L, 1L);
+    }
+
+
+    private void playSculkTentacleAnimation(Player player, List<LivingEntity> targets) {
+        final int extendTicks = 20;
+        final int graspTicks = 20;
+        final Map<LivingEntity, List<BlockDisplay>> tendrils = new HashMap<>();
+        final Map<LivingEntity, BlockDisplay> chargeSpheres = new HashMap<>();
+
+        player.getWorld().playSound(player.getLocation(), Sound.ENTITY_WARDEN_TENDRIL_CLICKS, 2.0f, 1.2f);
+        playGroundShockwave(player, PRIMARY_RADIUS);
+
+        for (LivingEntity target : targets) {
+            BlockDisplay charge = player.getWorld().spawn(player.getEyeLocation(), BlockDisplay.class, bd -> {
+                bd.setBlock(Material.SCULK_SHRIEKER.createBlockData());
+                bd.setBrightness(new Display.Brightness(15, 15));
+                bd.setInterpolationDuration(3);
+                bd.setInterpolationDelay(-1);
+                Transformation t = bd.getTransformation();
+                t.getScale().set(0.4f);
+                bd.setTransformation(t);
+            });
+            chargeSpheres.put(target, charge);
+
+            double distance = player.getLocation().distance(target.getLocation());
+            int tendrilLinks = (int) (distance * 2.5);
+            List<BlockDisplay> links = new ArrayList<>();
+            for (int i = 0; i < tendrilLinks; i++) {
+                BlockDisplay link = player.getWorld().spawn(player.getEyeLocation(), BlockDisplay.class, bd -> {
+                    bd.setBlock(Material.SCULK.createBlockData());
+                    bd.setInterpolationDuration(3);
+                    bd.setInterpolationDelay(-1);
+                    Transformation t = bd.getTransformation();
+                    t.getScale().set(0.25f);
+                    bd.setTransformation(t);
+                });
+                links.add(link);
+            }
+            tendrils.put(target, links);
+        }
+
+        new BukkitRunnable() {
+            private int ticks = 0;
+
+            @Override
+            public void run() {
+                if (ticks++ >= (extendTicks + graspTicks) || !player.isValid()) {
+                    this.cancel();
+                    return;
+                }
+
+                Location playerAnchor = player.getEyeLocation().add(0, -0.5, 0);
+
+                for (Map.Entry<LivingEntity, List<BlockDisplay>> entry : tendrils.entrySet()) {
+                    LivingEntity target = entry.getKey();
+                    if (!target.isValid()) continue;
+
+                    double extendProgress = Math.min(1.0, (double) ticks / extendTicks);
+                    Location targetAnchor = target.getLocation().add(0, target.getHeight() / 2, 0);
+                    Vector toTarget = targetAnchor.toVector().subtract(playerAnchor.toVector());
+
+                    List<BlockDisplay> links = entry.getValue();
+                    for (int i = 0; i < links.size(); i++) {
+                        BlockDisplay link = links.get(i);
+                        if (!link.isValid()) continue;
+
+                        double progress = (double) i / (links.size() - 1);
+                        Location linkPos = playerAnchor.clone().add(toTarget.clone().multiply(progress * extendProgress));
+                        linkPos.add(0, Math.sin(ticks * 0.5 + i * 0.5) * 0.2, 0);
+                        link.teleport(linkPos);
+                    }
+
+                    BlockDisplay charge = chargeSpheres.get(target);
+                    if (charge != null && charge.isValid()) {
+                        double chargeProgress = (double) ticks / (extendTicks + graspTicks);
+                        Location chargePos = playerAnchor.clone().add(toTarget.clone().multiply(chargeProgress));
+                        charge.teleport(chargePos);
+                    }
+                }
+            }
+
+            @Override
+            public synchronized void cancel() throws IllegalStateException {
+                super.cancel();
+                for (LivingEntity target : targets) {
+                    if (target.isValid()) {
+                        playSculkExplosion(target.getLocation().add(0, target.getHeight() / 2, 0));
+                        applyPrimaryEffects(target);
+                        if (target instanceof Player p) {
+                            p.setCooldown(Material.ENDER_PEARL, PEARL_COOLDOWN_TICKS);
+                            sendMessages(p);
+                        }
+                    }
+                }
+                tendrils.values().forEach(list -> list.forEach(BlockDisplay::remove));
+                chargeSpheres.values().forEach(BlockDisplay::remove);
+            }
+        }.runTaskTimer(plugin, 0L, 1L);
+    }
+
+    private void playGroundShockwave(Player player, double maxRadius) {
+        Location center = player.getLocation();
+        int particleCount = 50;
+        int animationTicks = 25;
+
+        for (int i = 0; i < particleCount; i++) {
+            ThreadLocalRandom r = ThreadLocalRandom.current();
+            BlockDisplay shard = player.getWorld().spawn(center, BlockDisplay.class, bd -> {
+                bd.setBlock(Material.SCULK.createBlockData());
+                bd.setInterpolationDuration(animationTicks);
+                bd.setInterpolationDelay(-1);
+                Transformation t = bd.getTransformation();
+                t.getScale().set(r.nextFloat() * 0.5f + 0.3f);
+                bd.setTransformation(t);
+            });
+
+            double angle = r.nextDouble(Math.PI * 2);
+            double distance = r.nextDouble(maxRadius * 0.8, maxRadius);
+            Location finalPos = center.clone().add(Math.cos(angle) * distance, 0.1, Math.sin(angle) * distance);
+
+            shard.teleport(finalPos);
+            Transformation finalTransform = shard.getTransformation();
+            finalTransform.getScale().set(0f);
+            shard.setTransformation(finalTransform);
+
+            new BukkitRunnable() { @Override public void run() { shard.remove(); }}.runTaskLater(plugin, animationTicks + 1);
+        }
+    }
+
+    private void playSculkExplosion(Location location) {
+        location.getWorld().playSound(location, Sound.ENTITY_WARDEN_SONIC_BOOM, 1.5f, 1.2f);
+        int particleCount = 40;
+        int animationTicks = 20;
+
+        for (int i = 0; i < particleCount; i++) {
+            ThreadLocalRandom r = ThreadLocalRandom.current();
+            BlockDisplay shard = location.getWorld().spawn(location, BlockDisplay.class, bd -> {
+                bd.setBlock(SCULK_MATERIALS.get(r.nextInt(SCULK_MATERIALS.size())).createBlockData());
+                bd.setInterpolationDuration(animationTicks);
+                bd.setInterpolationDelay(-1);
+                Transformation t = bd.getTransformation();
+                t.getScale().set(r.nextFloat() * 0.7f + 0.4f);
+                t.getLeftRotation().set(new AxisAngle4f(r.nextFloat() * 360, r.nextFloat(), r.nextFloat(), r.nextFloat()));
+                bd.setTransformation(t);
+            });
+
+            Vector randomVec = new Vector(r.nextDouble() - 0.5, r.nextDouble() - 0.5, r.nextDouble() - 0.5);
+            Location finalPos = location.clone().add(randomVec.normalize().multiply(3.0));
+            shard.teleport(finalPos);
+
+            Transformation finalTransform = shard.getTransformation();
+            finalTransform.getScale().set(0f);
+            shard.setTransformation(finalTransform);
+
+            new BukkitRunnable() { @Override public void run() { shard.remove(); }}.runTaskLater(plugin, animationTicks + 1);
+        }
+    }
+
+
+    private void playEchoingVengeanceAnimation(Player player) {
+        Location center = player.getLocation();
+        int particleCount = 70;
+        int animationTicks = 30;
+
+        for (int i = 0; i < particleCount; i++) {
+            ThreadLocalRandom r = ThreadLocalRandom.current();
+            BlockDisplay shard = player.getWorld().spawn(center, BlockDisplay.class, bd -> {
+                bd.setBlock(SCULK_MATERIALS.get(r.nextInt(SCULK_MATERIALS.size())).createBlockData());
+                bd.setInterpolationDuration(animationTicks);
+                bd.setInterpolationDelay(-1);
+                Transformation t = bd.getTransformation();
+                t.getScale().set(r.nextFloat() * 0.8f + 0.4f);
+                t.getLeftRotation().set(new AxisAngle4f(r.nextFloat() * 360, r.nextFloat(), r.nextFloat(), r.nextFloat()));
+                bd.setTransformation(t);
+            });
+
+            Location finalPos = center.clone().add(Vector.getRandom().subtract(new Vector(0.5, 0.5, 0.5)).normalize().multiply(ECHO_RADIUS));
+            shard.teleport(finalPos);
+
+            Transformation finalTransform = shard.getTransformation();
+            finalTransform.getScale().set(0f);
+            shard.setTransformation(finalTransform);
+
+            new BukkitRunnable() { @Override public void run() { shard.remove(); }}.runTaskLater(plugin, animationTicks + 1);
+        }
+
+        Location heartPos = player.getEyeLocation().add(0, 1.5, 0);
+        BlockDisplay shrieker = player.getWorld().spawn(heartPos, BlockDisplay.class, bd -> {
+            bd.setBlock(Material.SCULK_SHRIEKER.createBlockData());
+            bd.setInterpolationDuration(10);
+            bd.setInterpolationDelay(-1);
+            Transformation t = bd.getTransformation();
+            t.getScale().set(0f);
+            bd.setTransformation(t);
+        });
+
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                Transformation t = shrieker.getTransformation();
+                t.getScale().set(0.8f);
+                shrieker.setTransformation(t);
+            }
+        }.runTaskLater(plugin, 1L);
+
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (!shrieker.isValid()) return;
+                Transformation t = shrieker.getTransformation();
+                t.getScale().set(0f);
+                shrieker.setTransformation(t);
+                new BukkitRunnable() { @Override public void run() { shrieker.remove(); }}.runTaskLater(plugin, 11L);
+            }
+        }.runTaskLater(plugin, ECHO_EFFECT_DURATION_TICKS);
     }
 
     @EventHandler
@@ -148,7 +398,7 @@ public class SilenceTrim implements Listener {
     private void activateWardensEcho(Player player) {
         Location playerLocation = player.getLocation();
         player.getWorld().playSound(playerLocation, Sound.ENTITY_WARDEN_SONIC_BOOM, 1.5f, 0.6f);
-        triggerWardensEchoParticles(player);
+        playEchoingVengeanceAnimation(player);
 
         for (LivingEntity target : player.getWorld().getNearbyLivingEntities(playerLocation, ECHO_RADIUS)) {
             if (target.equals(player)) continue;
@@ -189,49 +439,5 @@ public class SilenceTrim implements Listener {
     private void sendMessages(Player targetPlayer) {
         Messaging.sendTrimMessage(targetPlayer, "Silence", ChatColor.RED, "You have been hit with the " + ChatColor.BOLD + "Warden's Roar!");
         Messaging.sendTrimMessage(targetPlayer, "Silence", ChatColor.RED, "Your Ender Pearl is on cooldown!");
-    }
-
-    private void createWardenShockwave(Location center, double maxRadius) {
-        new BukkitRunnable() {
-            double currentRadius = 1.0;
-
-            @Override
-            public void run() {
-                if (currentRadius > maxRadius) {
-                    this.cancel();
-                    center.getWorld().spawnParticle(Particle.SONIC_BOOM, center.clone().add(0, 1, 0), 1);
-                    return;
-                }
-
-                World world = center.getWorld();
-                int points = (int) (currentRadius * 8);
-
-                for (int i = 0; i < points; i++) {
-                    double angle = 2 * Math.PI * i / points;
-                    double x = center.getX() + (currentRadius * Math.cos(angle));
-                    double z = center.getZ() + (currentRadius * Math.sin(angle));
-                    Location particleLoc = new Location(world, x, center.getY() + 0.5, z);
-
-                    world.spawnParticle(Particle.SCULK_SOUL, particleLoc, 1, 0, 0, 0, 0);
-                }
-
-                currentRadius += 1.0;
-            }
-        }.runTaskTimer(plugin, 0L, 1L);
-    }
-
-    private void triggerWardensEchoParticles(Player player) {
-        Location loc = player.getLocation();
-        World world = loc.getWorld();
-
-        for (int i = 0; i < 360; i += 15) {
-            double angle = Math.toRadians(i);
-            double x = ECHO_RADIUS * Math.cos(angle);
-            double z = ECHO_RADIUS * Math.sin(angle);
-            world.spawnParticle(Particle.SCULK_CHARGE_POP, loc.clone().add(x, 1, z), 5, 0.2, 0.5, 0.2, 0.1);
-        }
-
-        world.spawnParticle(Particle.SONIC_BOOM, loc.add(0, 1, 0), 3);
-        world.playSound(loc, Sound.ENTITY_WARDEN_HEARTBEAT, 2.5f, 0.5f);
     }
 }

@@ -54,9 +54,6 @@ public class PowerTrimsCommand implements CommandExecutor {
             case "trustlist":
                 handleTrustList(sender);
                 break;
-            case "panel":
-                handlePanel(sender);
-                break;
             default:
                 sendHelpMessage(sender);
                 break;
@@ -65,34 +62,6 @@ public class PowerTrimsCommand implements CommandExecutor {
         return true;
     }
 
-    private void handlePanel(CommandSender sender) {
-        if (!sender.hasPermission("powertrims.panel")) {
-            sender.sendMessage(ChatColor.RED + "You don't have permission to do that.");
-            return;
-        }
-
-        String configAddress = plugin.getConfig().getString("web-address", "0.0.0.0");
-        int port = plugin.getConfig().getInt("web-port", 8080);
-
-        if (sender instanceof Player) {
-            Player player = (Player) sender;
-            if (configAddress.equals("0.0.0.0")) {
-                player.sendMessage(ChatColor.RED + "The web panel is not configured for public access.");
-                player.sendMessage(ChatColor.YELLOW + "Please ask a server administrator to set the 'web-address' in the config.yml.");
-            } else {
-                String url = "http://" + configAddress + ":" + port;
-                TextComponent message = new TextComponent(ChatColor.GOLD + "Click here to open the PowerTrims web panel.");
-                message.setClickEvent(new ClickEvent(ClickEvent.Action.OPEN_URL, url));
-                message.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text("Opens " + url + " in your browser")));
-                player.spigot().sendMessage(message);
-            }
-        } else {
-            // Console sender
-            String url = "http://localhost:" + port;
-            sender.sendMessage(ChatColor.GREEN + "PowerTrims web panel URL: " + ChatColor.YELLOW + url);
-            sender.sendMessage(ChatColor.GRAY + "(Use this URL in a browser on the same machine as the server.)");
-        }
-    }
 
     private void handleReload(CommandSender sender) {
         if (!sender.hasPermission("powertrims.reload")) {

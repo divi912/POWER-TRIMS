@@ -1,24 +1,3 @@
-/*
- * This file is part of [ POWER TRIMS ].
- *
- * [POWER TRIMS] is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * [ POWER TRIMS ] is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
- *
- * Copyright (C) [2025] [ div ].
- */
-
-
-
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.*;
@@ -38,6 +17,7 @@ import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.util.RayTraceResult;
+import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
 
 import java.util.*;
@@ -47,11 +27,11 @@ public class WildTrim implements Listener {
 
     private final JavaPlugin plugin;
     private final TrimCooldownManager cooldownManager;
-    private final PersistentTrustManager trustManager; // Add an instance of the Trust Manager
+    private final PersistentTrustManager trustManager; 
     private final ConfigManager configManager;
     private final AbilityManager abilityManager;
+    private final Random random = new Random();
 
-    // --- CONSTANTS ---
     private final int PASSIVE_TRIGGER_HEALTH;
     private final int PASSIVE_COOLDOWN_SECONDS;
     private final long PRIMARY_COOLDOWN;
@@ -69,7 +49,7 @@ public class WildTrim implements Listener {
     public WildTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
-        this.trustManager = trustManager; // Initialize the Trust Manager
+        this.trustManager = trustManager; 
         this.configManager = configManager;
         this.abilityManager = abilityManager;
 
@@ -102,14 +82,12 @@ public class WildTrim implements Listener {
         Location start = player.getEyeLocation();
         Vector direction = player.getLocation().getDirection().normalize();
         double range = GRAPPLE_RANGE;
-        Player wildUser = player; // Store the player using the ability
+        Player wildUser = player; 
 
-        // Play sound effect for grappling hook
         player.playSound(player.getLocation(), Sound.ENTITY_FISHING_BOBBER_THROW, 1.0f, 1.0f);
 
         boolean abilityUsed = false;
 
-        // Use ray-tracing to find the exact entity in the crosshair
         RayTraceResult entityHit = player.getWorld().rayTraceEntities(
                 start,
                 direction,
@@ -117,14 +95,12 @@ public class WildTrim implements Listener {
                 entity -> entity instanceof LivingEntity && entity != wildUser
         );
 
-        // Grapple to the entity under the crosshair
         if (entityHit != null && entityHit.getHitEntity() instanceof LivingEntity targetEntity) {
             if (targetEntity instanceof Player targetPlayer && trustManager.isTrusted(wildUser.getUniqueId(), targetPlayer.getUniqueId())) {
                 Messaging.sendTrimMessage(player, "Wild", ChatColor.GREEN, "Grappling to trusted player!");
                 visualizeGrapple(player, targetEntity.getLocation().add(0, 1, 0));
                 smoothlyPullPlayer(player, targetEntity.getLocation().add(0, 1, 0));
             } else {
-                // Grapple to the entity under the crosshair
                 Messaging.sendTrimMessage(player, "Wild", ChatColor.GREEN, "Grappling to entity!");
                 visualizeGrapple(player, targetEntity.getLocation().add(0, 1, 0));
                 smoothlyPullPlayer(player, targetEntity.getLocation().add(0, 1, 0));
@@ -133,7 +109,6 @@ public class WildTrim implements Listener {
                 abilityUsed = true;
             }
         } else {
-            // Grapple to the block under the crosshair if no entity is found
             Block targetBlock = player.getTargetBlockExact((int) range);
             if (targetBlock != null && !targetBlock.getType().isAir()) {
                 Messaging.sendTrimMessage(player, "Wild", ChatColor.GREEN, "Grappling to block!");
@@ -141,28 +116,54 @@ public class WildTrim implements Listener {
                 smoothlyPullPlayer(player, targetBlock.getLocation().add(0.5, 1, 0.5));
                 abilityUsed = true;
             } else {
-                // No valid target
                 Messaging.sendTrimMessage(player, "Wild", ChatColor.RED, "No valid target found!");
             }
         }
 
-        // Apply cooldown only if the ability was successfully used
         if (abilityUsed) {
             cooldownManager.setCooldown(player, TrimPattern.WILD, PRIMARY_COOLDOWN);
         }
     }
 
 
-    // Visualize the grappling effect with particles
     private void visualizeGrapple(Player player, Location target) {
         Location start = player.getEyeLocation();
-        Vector direction = target.toVector().subtract(start.toVector());
-        double distance = start.distance(target);
+        World world = player.getWorld();
+        if (world == null) return;
 
-        for (double d = 0; d < distance; d += 0.5) {
-            Location particleLoc = start.clone().add(direction.clone().normalize().multiply(d));
-            player.getWorld().spawnParticle(Particle.CRIT, particleLoc, 1, 0, 0, 0, 0);
-        }
+        final List<BlockDisplay> vineParts = new ArrayList<>();
+        final Material vineMaterial = Material.VINE;
+        Vector travel = target.toVector().subtract(start.toVector());
+        int segments = (int) (travel.length() * 2.0);
+        if (segments == 0) return;
+        Vector step = travel.clone().multiply(1.0 / segments);
+
+        new BukkitRunnable() {
+            int currentSegment = 0;
+            @Override
+            public void run() {
+                if (currentSegment >= segments) {
+                    new BukkitRunnable() {
+                        @Override
+                        public void run() {
+                            vineParts.forEach(Entity::remove);
+                        }
+                    }.runTaskLater(plugin, 20L);
+                    this.cancel();
+                    return;
+                }
+
+                Location currentPos = start.clone().add(step.clone().multiply(currentSegment));
+                BlockDisplay part = world.spawn(currentPos, BlockDisplay.class, bd -> {
+                    bd.setBlock(vineMaterial.createBlockData());
+                    Transformation t = bd.getTransformation();
+                    t.getScale().set(0.2f);
+                    bd.setTransformation(t);
+                });
+                vineParts.add(part);
+                currentSegment++;
+            }
+        }.runTaskTimer(plugin, 0L, 1L);
     }
 
 
@@ -184,26 +185,24 @@ public class WildTrim implements Listener {
 
                 double distanceSquared = player.getLocation().distanceSquared(target);
 
-                if (distanceSquared < 1.5) { // Stop earlier if close
+                if (distanceSquared < 1.5) { 
                     reachedTarget = true;
                     finishGrapple();
                     return;
                 }
 
-                if (ticks++ > 30) { // Reduce max time from 40 to 30 ticks (1.5 sec)
+                if (ticks++ > 30) { 
                     finishGrapple();
                     return;
                 }
 
-                // Dynamically calculate pull vector for smoother motion
                 Vector pullVector = target.toVector().subtract(player.getLocation().toVector());
                 double length = pullVector.length();
-                double speed = Math.min(maxSpeed, length * 0.28); // Adjusted speed factor
+                double speed = Math.min(maxSpeed, length * 0.28); 
 
                 player.setVelocity(pullVector.normalize().multiply(speed));
 
-                // Effects
-                player.getWorld().spawnParticle(Particle.LARGE_SMOKE, player.getLocation(), 5, 0.2, 0.2, 0.2, 0);
+                playWindEffect(player);
                 if (ticks % 5 == 0) {
                     player.playSound(player.getLocation(), Sound.ENTITY_ENDER_DRAGON_FLAP, 0.5f, 1.2f);
                 }
@@ -220,18 +219,45 @@ public class WildTrim implements Listener {
         }.runTaskTimer(plugin, 0, 1);
     }
 
+    private void playWindEffect(Player player) {
+        Location loc = player.getLocation();
+        World world = player.getWorld();
+        if (world == null) return;
+
+        for (int i = 0; i < 3; i++) {
+            Location spawnLoc = loc.clone().add((random.nextDouble() - 0.5) * 1.5, (random.nextDouble() - 0.5) * 1.5 + 1, (random.nextDouble() - 0.5) * 1.5);
+            BlockDisplay block = world.spawn(spawnLoc, BlockDisplay.class, bd -> {
+                bd.setBlock(Material.LIGHT_GRAY_WOOL.createBlockData());
+                Transformation t = bd.getTransformation();
+                t.getScale().set((float) (0.1 + random.nextDouble() * 0.1));
+                bd.setTransformation(t);
+            });
+
+            Vector velocity = player.getVelocity().clone().multiply(-0.5).add(new Vector(random.nextDouble() - 0.5, random.nextDouble() - 0.5, random.nextDouble() - 0.5).multiply(0.2));
+            new BukkitRunnable() {
+                int life = 0;
+                @Override
+                public void run() {
+                    if (life++ > 10 || !block.isValid()) {
+                        block.remove();
+                        this.cancel();
+                        return;
+                    }
+                    block.teleport(block.getLocation().add(velocity));
+                }
+            }.runTaskTimer(plugin, 0L, 1L);
+        }
+    }
+
 
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
-        // Check if the player is sneaking when they press the offhand key
         if (!configManager.isTrimEnabled("wild")) {
             return;
         }
         if (event.getPlayer().isSneaking()) {
-            // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);
 
-            // Activate the ability
             abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
@@ -257,7 +283,7 @@ public class WildTrim implements Listener {
 
             activateRootTrap(player);
             setPassiveCooldown(player);
-        }, 1L); // Small delay to avoid fake damage event issues
+        }, 1L); 
     }
 
     public void activateRootTrap(Player player) {
@@ -274,15 +300,14 @@ public class WildTrim implements Listener {
             if (entity instanceof LivingEntity && entity != player) {
                 LivingEntity target = (LivingEntity) entity;
                 if (target instanceof Player targetPlayer && trustManager.isTrusted(player.getUniqueId(), targetPlayer.getUniqueId())) {
-                    continue; // Skip trusted players
+                    continue; 
                 }
                 affectedEntities.add(target);
                 frozenEntities.add(target.getUniqueId());
-                spawnVinesAround(target.getLocation());
+                spawnVinesAnimation(target.getLocation());
             }
         }
 
-        // Freeze movement
         new BukkitRunnable() {
             @Override
             public void run() {
@@ -294,42 +319,73 @@ public class WildTrim implements Listener {
             }
         }.runTaskTimer(plugin, 0, 5);
 
-        // Remove vines and unfreeze after 5 seconds
         new BukkitRunnable() {
             @Override
             public void run() {
                 for (LivingEntity entity : affectedEntities) {
                     frozenEntities.remove(entity.getUniqueId());
                 }
-                removeVines(affectedEntities);
             }
         }.runTaskLater(plugin, ROOT_TRAP_DURATION_TICKS);
     }
 
 
-    private void spawnVinesAround(Location location) {
-        for (int x = -1; x <= 1; x++) {
-            for (int z = -1; z <= 1; z++) {
-                Location vineLoc = location.clone().add(x, 0, z);
-                if (vineLoc.getBlock().getType() == Material.AIR) {
-                    vineLoc.getBlock().setType(Material.VINE);
-                }
-            }
-        }
-    }
+    private void spawnVinesAnimation(Location location) {
+        World world = location.getWorld();
+        if (world == null) return;
 
-    private void removeVines(List<LivingEntity> entities) {
-        for (LivingEntity entity : entities) {
-            Location location = entity.getLocation();
-            for (int x = -1; x <= 1; x++) {
-                for (int z = -1; z <= 1; z++) {
-                    Location vineLoc = location.clone().add(x, 0, z);
-                    if (vineLoc.getBlock().getType() == Material.VINE) {
-                        vineLoc.getBlock().setType(Material.AIR);
+        final List<BlockDisplay> vines = new ArrayList<>();
+        final Material vineMaterial = Material.OAK_LOG;
+        final int duration = ROOT_TRAP_DURATION_TICKS;
+
+        for (int i = 0; i < 8; i++) {
+            double angle = 2 * Math.PI * i / 8;
+            Location spawnLoc = location.clone().add(Math.cos(angle) * 1.2, 0, Math.sin(angle) * 1.2);
+            BlockDisplay vine = world.spawn(spawnLoc, BlockDisplay.class, bd -> {
+                bd.setBlock(vineMaterial.createBlockData());
+                Transformation t = bd.getTransformation();
+                t.getScale().set(0.1f, 0.01f, 0.1f);
+                bd.setTransformation(t);
+            });
+            vines.add(vine);
+        }
+
+        new BukkitRunnable() {
+            int ticks = 0;
+            @Override
+            public void run() {
+                if (ticks++ > duration) {
+                    new BukkitRunnable() {
+                        int shrinkTicks = 0;
+                        @Override
+                        public void run() {
+                            if (shrinkTicks++ > 20) {
+                                vines.forEach(Entity::remove);
+                                this.cancel();
+                                return;
+                            }
+                            for (BlockDisplay vine : vines) {
+                                if (!vine.isValid()) continue;
+                                Transformation t = vine.getTransformation();
+                                t.getScale().mul(0.8f);
+                                vine.setTransformation(t);
+                            }
+                        }
+                    }.runTaskTimer(plugin, 0L, 1L);
+                    this.cancel();
+                    return;
+                }
+
+                for (BlockDisplay vine : vines) {
+                    if (!vine.isValid()) continue;
+                    Transformation t = vine.getTransformation();
+                    if (t.getScale().y < 2.0f) {
+                        t.getScale().add(0, 0.1f, 0);
+                        vine.setTransformation(t);
                     }
                 }
             }
-        }
+        }.runTaskTimer(plugin, 0L, 1L);
     }
 
     @EventHandler
@@ -341,12 +397,10 @@ public class WildTrim implements Listener {
 
 
 
-    // Checks if the ability is on cooldown
     private boolean isPassiveOnCooldown(Player player) {
         return passiveCooldowns.containsKey(player.getUniqueId()) && (System.currentTimeMillis() < passiveCooldowns.get(player.getUniqueId()));
     }
 
-    // Sets the cooldown
     private void setPassiveCooldown(Player player) {
         passiveCooldowns.put(player.getUniqueId(), System.currentTimeMillis() + (PASSIVE_COOLDOWN_SECONDS * 1000L));
     }

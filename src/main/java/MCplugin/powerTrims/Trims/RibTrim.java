@@ -1,23 +1,3 @@
-/*
- * This file is part of [ POWER TRIMS ].
- *
- * [POWER TRIMS] is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * [ POWER TRIMS ] is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with [Your Plugin Name].  If not, see <https://www.gnu.org/licenses/>.
- *
- * Copyright (C) [2025] [ div ].
- */
-
-
 package MCplugin.powerTrims.Trims;
 
 import MCplugin.powerTrims.Logic.*;
@@ -40,8 +20,11 @@ import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.util.Transformation;
 
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Consumer;
 
 public class RibTrim implements Listener {
     private final JavaPlugin plugin;
@@ -50,18 +33,14 @@ public class RibTrim implements Listener {
     private final ConfigManager configManager;
     private final AbilityManager abilityManager;
 
-    // --- CONSTANTS ---
     private final long RIB_COOLDOWN;
     private final long MINION_LIFESPAN_TICKS;
     private static final NamespacedKey OWNER_KEY;
 
-    // Static initializer for the NamespacedKey
     static {
-        // It's good practice to initialize keys once.
         OWNER_KEY = new NamespacedKey("powertrims", "owner_uuid");
     }
 
-    // --- INSTANCE VARIABLES (non-static to prevent memory leaks across reloads) ---
     private final Map<UUID, LivingEntity> playerTargetMap = new HashMap<>();
     private final Map<UUID, List<Mob>> playerMinionMap = new HashMap<>();
 
@@ -82,89 +61,169 @@ public class RibTrim implements Listener {
 
 
     public void activateRibPrimary(Player player) {
-        if (!configManager.isTrimEnabled("rib")) {
-            return;
-        }
-        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.RIB) || cooldownManager.isOnCooldown(player, TrimPattern.RIB)) {
-            return;
-        }
+        if (!configManager.isTrimEnabled("rib")) return;
+        if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.RIB) || cooldownManager.isOnCooldown(player, TrimPattern.RIB)) return;
+        if (Bukkit.getPluginManager().isPluginEnabled("WorldGuard") && !WorldGuardIntegration.canUseAbilities(player)) return;
 
-        if (Bukkit.getPluginManager().getPlugin("WorldGuard") != null && !WorldGuardIntegration.canUseAbilities(player)) {
-            Messaging.sendError(player, "You cannot use this ability in the current region.");
-            return;
-        }
-
-        Location playerLoc = player.getLocation();
-        World world = player.getWorld();
-        UUID ownerUUID = player.getUniqueId();
-
-        world.playSound(playerLoc, Sound.ENTITY_SKELETON_AMBIENT, 1.0f, 1.0f);
-        world.playSound(playerLoc, Sound.BLOCK_BONE_BLOCK_PLACE, 1.0f, 1.2f);
-        createBoneEffect(player);
-
-        playerMinionMap.putIfAbsent(ownerUUID, new ArrayList<>());
+        playerMinionMap.putIfAbsent(player.getUniqueId(), new ArrayList<>());
         int spawnCount = 3;
 
         for (int i = 0; i < spawnCount; i++) {
             double angle = Math.toRadians((360.0 / spawnCount) * i);
-            double offsetX = Math.cos(angle) * 3;
-            double offsetZ = Math.sin(angle) * 3;
-            Location spawnLoc = playerLoc.clone().add(offsetX, 0, offsetZ);
+            Location spawnLoc = player.getLocation().clone().add(Math.cos(angle) * 3, 0, Math.sin(angle) * 3);
 
-            // Spawn the Bogged entity
-            Bogged bogged = world.spawn(spawnLoc, Bogged.class);
-
-            // Set properties
-            bogged.setCustomName(ChatColor.WHITE + "Bone Warrior");
-            bogged.setCustomNameVisible(true);
-            bogged.getPersistentDataContainer().set(OWNER_KEY, PersistentDataType.STRING, ownerUUID.toString());
-
-            // Apply equipment and buffs
-            ItemStack bow = new ItemStack(Material.BOW);
-            ItemStack helmet = new ItemStack(Material.LEATHER_HELMET);
-            bogged.getEquipment().setHelmet(helmet);
-            bogged.getEquipment().setHelmetDropChance(0.0f);
-            bow.addUnsafeEnchantment(Enchantment.POWER, 5);
-            Objects.requireNonNull(bogged.getEquipment()).setItemInMainHand(bow);
-            bogged.getEquipment().setItemInMainHandDropChance(0.0f);
-            applyBuffs(bogged);
-
-            // Add to the owner's minion list
-            playerMinionMap.get(ownerUUID).add(bogged);
-
-            // Set initial target if one exists
-            LivingEntity currentTarget = playerTargetMap.get(ownerUUID);
-            if (isValidTarget(currentTarget, player)) {
-                bogged.setTarget(currentTarget);
-            }
-
-            // **IMPROVEMENT**: Add a despawn timer for cleanup
-            new BukkitRunnable() {
-                @Override
-                public void run() {
-                    if (bogged.isValid()) {
-                        bogged.getWorld().spawnParticle(Particle.SMOKE, bogged.getLocation().add(0, 1, 0), 15, 0.3, 0.5, 0.3, 0);
-                        bogged.remove();
-                    }
+            playSummonAnimation(spawnLoc, (finalLocation) -> {
+                Bogged bogged = spawnMinion(player, finalLocation);
+                playerMinionMap.get(player.getUniqueId()).add(bogged);
+                LivingEntity currentTarget = playerTargetMap.get(player.getUniqueId());
+                if (isValidTarget(currentTarget, player)) {
+                    bogged.setTarget(currentTarget);
                 }
-            }.runTaskLater(plugin, MINION_LIFESPAN_TICKS);
+                scheduleMinionRemoval(bogged, MINION_LIFESPAN_TICKS);
+            });
         }
 
         cooldownManager.setCooldown(player, TrimPattern.RIB, RIB_COOLDOWN);
-        Messaging.sendTrimMessage(player, "Rib", ChatColor.WHITE, "You have summoned Bone Warriors!");
     }
 
-    /**
-     * Event handler for when a player with minions attacks something.
-     * This makes the minions focus fire on the player's target.
-     */
+    private void playSummonAnimation(Location location, Consumer<Location> onSummonCallback) {
+        int pillarHeight = 3;
+        int eruptionTicks = 10;
+        int staggerDelay = 3;
+        int lingerTicks = 15;
+        List<BlockDisplay> pillarBlocks = new ArrayList<>();
+        long totalEruptionTime = ((long)(pillarHeight - 1) * staggerDelay) + eruptionTicks;
+
+        location.getWorld().playSound(location, Sound.BLOCK_BONE_BLOCK_PLACE, 1.5f, 0.7f);
+
+        new BukkitRunnable() {
+            int ticks = 0;
+            @Override
+            public void run() {
+                if (ticks++ > totalEruptionTime + lingerTicks) {
+                    this.cancel();
+                    return;
+                }
+                location.getWorld().spawnParticle(Particle.SOUL, location, 3, 0.5, 0.1, 0.5, 0.01);
+                location.getWorld().spawnParticle(Particle.LARGE_SMOKE, location, 1, 0.5, 0.1, 0.5, 0);
+            }
+        }.runTaskTimer(plugin, 0L, 2L);
+
+
+        for (int i = 0; i < pillarHeight; i++) {
+            int finalYOffset = i;
+            Location startPos = location.clone().add(0, i - pillarHeight, 0);
+
+            BlockDisplay block = location.getWorld().spawn(startPos, BlockDisplay.class, bd -> {
+                bd.setBlock(Material.BONE_BLOCK.createBlockData());
+                bd.setInterpolationDuration(eruptionTicks);
+                bd.setInterpolationDelay(-1);
+                Transformation t = bd.getTransformation();
+                t.getScale().set(1.0f);
+                bd.setTransformation(t);
+            });
+            pillarBlocks.add(block);
+
+            new BukkitRunnable() {
+                @Override
+                public void run() {
+                    if (block.isValid()) {
+                        block.teleport(location.clone().add(0, finalYOffset, 0));
+                    }
+                }
+            }.runTaskLater(plugin, i * staggerDelay);
+        }
+
+
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                location.getWorld().playSound(location, Sound.ENTITY_WITHER_SKELETON_HURT, 1.2f, 0.5f);
+                location.getWorld().spawnParticle(Particle.SOUL_FIRE_FLAME, location.clone().add(0, 1, 0), 25, 0.5, 0.5, 0.5, 0.05);
+                for (BlockDisplay block : pillarBlocks) {
+                    if (block.isValid()) {
+                        block.getWorld().spawnParticle(Particle.BLOCK, block.getLocation().add(0, 0.5, 0), 40, 0.5, 0.5, 0.5, Material.BONE_BLOCK.createBlockData());
+                        block.remove();
+                    }
+                }
+                onSummonCallback.accept(location);
+            }
+        }.runTaskLater(plugin, totalEruptionTime + lingerTicks);
+    }
+
+
+    private void playMinionDespawnAnimation(Location location) {
+        location.getWorld().playSound(location, Sound.BLOCK_BONE_BLOCK_BREAK, 1.0f, 0.8f);
+        location.getWorld().spawnParticle(Particle.SOUL, location, 15, 0.3, 0.5, 0.3, 0.05);
+
+        int particleCount = 20;
+        int animationTicks = 25;
+
+        for (int i = 0; i < particleCount; i++) {
+            ThreadLocalRandom r = ThreadLocalRandom.current();
+            Location startPos = location.clone().add(r.nextGaussian() * 0.5, r.nextGaussian() * 0.8, r.nextGaussian() * 0.5);
+            BlockDisplay particle = location.getWorld().spawn(startPos, BlockDisplay.class, bd -> {
+                bd.setBlock(Material.BONE_BLOCK.createBlockData());
+                bd.setInterpolationDuration(animationTicks);
+                bd.setInterpolationDelay(-1);
+                Transformation t = bd.getTransformation();
+                t.getScale().set(r.nextFloat() * 0.4f + 0.2f);
+                bd.setTransformation(t);
+            });
+
+            particle.teleport(location.clone().subtract(0, 1, 0));
+            Transformation finalTransform = particle.getTransformation();
+            finalTransform.getScale().set(0f);
+            particle.setTransformation(finalTransform);
+            new BukkitRunnable() { @Override public void run() { if (particle.isValid()) particle.remove(); }}.runTaskLater(plugin, animationTicks + 1);
+        }
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                location.getWorld().spawnParticle(Particle.SMOKE, location, 10, 0.5, 0.2, 0.5, 0);
+            }
+        }.runTaskLater(plugin, animationTicks);
+    }
+
+    private Bogged spawnMinion(Player owner, Location location) {
+        return owner.getWorld().spawn(location, Bogged.class, bogged -> {
+            bogged.getPersistentDataContainer().set(OWNER_KEY, PersistentDataType.STRING, owner.getUniqueId().toString());
+            bogged.setCustomName(ChatColor.WHITE + "Bone Warrior");
+            bogged.setCustomNameVisible(true);
+
+            ItemStack bow = new ItemStack(Material.BOW);
+            bow.addUnsafeEnchantment(Enchantment.POWER, 5);
+            Optional.of(bogged.getEquipment()).ifPresent(eq -> {
+                eq.setItemInMainHand(bow);
+                eq.setItemInMainHandDropChance(0.0f);
+                eq.setHelmet(new ItemStack(Material.LEATHER_HELMET));
+                eq.setHelmetDropChance(0.0f);
+            });
+            applyBuffs(bogged);
+        });
+    }
+
+
+
+    private void scheduleMinionRemoval(Mob minion, long ticks) {
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                if (minion.isValid()) {
+                    playMinionDespawnAnimation(minion.getEyeLocation());
+                    minion.remove();
+                }
+            }
+        }.runTaskLater(plugin, ticks);
+    }
+
+
     @EventHandler
     public void onOwnerAttack(EntityDamageByEntityEvent event) {
         if (!(event.getDamager() instanceof Player owner) || !(event.getEntity() instanceof LivingEntity target)) {
             return;
         }
 
-        // Only act if the player actually has minions
         List<Mob> minions = playerMinionMap.get(owner.getUniqueId());
         if (minions == null || minions.isEmpty()) {
             return;
@@ -172,10 +231,9 @@ public class RibTrim implements Listener {
 
         if (!isValidTarget(target, owner)) {
             playerTargetMap.remove(owner.getUniqueId());
-            return; // Don't target own minions, trusted players, etc.
+            return;
         }
 
-        // Update the primary target and command minions to attack
         playerTargetMap.put(owner.getUniqueId(), target);
         for (Mob minion : minions) {
             if (minion.isValid()) {
@@ -186,24 +244,17 @@ public class RibTrim implements Listener {
 
     @EventHandler
     public void onOffhandPress(PlayerSwapHandItemsEvent event) {
-        // Check if the player is sneaking when they press the offhand key
         if (!configManager.isTrimEnabled("rib")) {
             return;
         }
         if (event.getPlayer().isSneaking()) {
-            // This is important: it prevents the player's hands from actually swapping items
             event.setCancelled(true);
 
-            // Activate the ability
             abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
 
 
-    /**
-     * BEHAVIOR IMPROVEMENT: Defensive AI
-     * Makes minions attack any entity that damages their owner.
-     */
     @EventHandler
     public void onOwnerDamaged(EntityDamageByEntityEvent event) {
         if (!(event.getEntity() instanceof Player owner) || !(event.getDamager() instanceof LivingEntity attacker)) {
@@ -215,9 +266,8 @@ public class RibTrim implements Listener {
             return;
         }
 
-        // Command all minions to defend their owner
         if (isValidTarget(attacker, owner)) {
-            playerTargetMap.put(owner.getUniqueId(), attacker); // New target is the attacker
+            playerTargetMap.put(owner.getUniqueId(), attacker);
             for (Mob minion : minions) {
                 if (minion.isValid()) {
                     minion.setTarget(attacker);
@@ -226,9 +276,6 @@ public class RibTrim implements Listener {
         }
     }
 
-    /**
-     * Prevents minions from targeting their owner, trusted players, or allied minions.
-     */
     @EventHandler
     public void onMinionTarget(EntityTargetEvent event) {
         if (!(event.getEntity() instanceof Mob minion)) return;
@@ -243,9 +290,8 @@ public class RibTrim implements Listener {
         }
     }
 
-    /**
-     * MEMORY LEAK FIX: Clean up when minions die.
-     */
+
+
     @EventHandler
     public void onEntityDeath(EntityDeathEvent event) {
         LivingEntity deadEntity = event.getEntity();
@@ -259,9 +305,6 @@ public class RibTrim implements Listener {
         }
     }
 
-    /**
-     * MEMORY LEAK FIX: Clean up when the owner logs out.
-     */
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         UUID ownerUUID = event.getPlayer().getUniqueId();
@@ -276,23 +319,13 @@ public class RibTrim implements Listener {
         playerTargetMap.remove(ownerUUID);
     }
 
-    // --- HELPER METHODS ---
-
-    /**
-     * A central method to check if a target is valid for a player's minions.
-     * @param target The potential target entity.
-     * @param owner The owner of the minions.
-     * @return True if the target is valid, false otherwise.
-     */
     private boolean isValidTarget(Entity target, Player owner) {
         if (target == null || !target.isValid() || target.equals(owner)) {
             return false;
         }
-        // Don't target trusted players
         if (target instanceof Player targetPlayer && trustManager.isTrusted(owner.getUniqueId(), targetPlayer.getUniqueId())) {
             return false;
         }
-        // Don't target other minions of the same owner
         String targetOwnerUUID = target.getPersistentDataContainer().get(OWNER_KEY, PersistentDataType.STRING);
         return !(targetOwnerUUID != null && targetOwnerUUID.equals(owner.getUniqueId().toString()));
     }
@@ -306,19 +339,9 @@ public class RibTrim implements Listener {
 
         AttributeInstance dmgAttr = mob.getAttribute(Attribute.ATTACK_DAMAGE);
         if (dmgAttr != null) {
-            dmgAttr.setBaseValue(10.0); // Note: This primarily affects melee, bow damage is from enchantments.
+            dmgAttr.setBaseValue(10.0);
         }
     }
 
-    private void createBoneEffect(Player player) {
-        Location loc = player.getLocation();
-        World world = player.getWorld();
 
-        for (double angle = 0; angle < Math.PI * 2; angle += Math.PI / 16) {
-            double x = Math.cos(angle) * 5;
-            double z = Math.sin(angle) * 5;
-            Location particleLoc = loc.clone().add(x, 0.5, z);
-            world.spawnParticle(Particle.BLOCK, particleLoc, 5, 0.2, 0.2, 0.2, 0, Bukkit.createBlockData(Material.BONE_BLOCK));
-        }
-    }
 }

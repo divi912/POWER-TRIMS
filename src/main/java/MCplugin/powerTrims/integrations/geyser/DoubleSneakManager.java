@@ -36,8 +36,6 @@ public class DoubleSneakManager implements Listener {
 
     @EventHandler
     public void onPlayerToggleSneak(PlayerToggleSneakEvent event) {
-        if (!event.isSneaking()) return;
-
         Player player = event.getPlayer();
         if (!geyserIntegration.isBedrockPlayer(player.getUniqueId())) {
             return;
@@ -45,16 +43,15 @@ public class DoubleSneakManager implements Listener {
 
         UUID playerUuid = player.getUniqueId();
         long currentTime = System.currentTimeMillis();
-        long lastTime = lastSneakTime.getOrDefault(playerUuid, 0L);
 
-        if (currentTime - lastTime < DOUBLE_SNEAK_THRESHOLD) {
-            // It's a double sneak, activate the ability
-            abilityManager.activatePrimaryAbility(player);
-            // Reset the timer to prevent triple-sneak from activating it again
-            lastSneakTime.put(playerUuid, 0L);
-        } else {
-            // It's the first sneak, just record the time
+        if (event.isSneaking()) {
             lastSneakTime.put(playerUuid, currentTime);
+        } else {
+            long lastTime = lastSneakTime.getOrDefault(playerUuid, 0L);
+            if (currentTime - lastTime < DOUBLE_SNEAK_THRESHOLD) {
+                abilityManager.activatePrimaryAbility(player);
+                lastSneakTime.put(playerUuid, 0L);
+            }
         }
     }
 }
