@@ -14,15 +14,15 @@ public class SilenceUltData {
     // --- Core Ability Constants ---
     public static final double RAGE_PER_HIT_TAKEN = 1.0;
     public static final double RAGE_PER_HIT_DEALT = 0.5;
-    public static final double MAX_RAGE = 10.0;
+    public static final double MAX_RAGE = 150.0;
     public static final long WARDEN_DURATION_SECONDS = 40;
     public static final int WARDEN_STRENGTH_LEVEL = 2; // Strength III
     public static final int WARDEN_HEALTH_BOOST_LEVEL = 4; // Health Boost V (8 extra hearts)
     public static final int WARDEN_RESISTANCE_LEVEL = 1; // Resistance II
 
     // --- Ability Specific Constants ---
-    public static final long BOOM_COOLDOWN_SECONDS = 5;
-    public static final int BOOM_DAMAGE = 15;
+    public static final long BOOM_COOLDOWN_SECONDS = 10;
+    public static final int BOOM_DAMAGE = 12;
     public static final double BOOM_LENGTH = 20.0;
     public static final double BOOM_AOE_RADIUS = 3.0;
     public final Set<UUID> chargingBoomPlayers = new HashSet<>();
@@ -58,6 +58,5 @@ public class SilenceUltData {
     // --- Centralized storage for tasks and block data ---
     public final Map<UUID, Map<Location, BlockData>> originalBlocks = new ConcurrentHashMap<>();
     public final Map<UUID, BukkitTask> sculkTasks = new ConcurrentHashMap<>();
-    public final Map<UUID, BukkitTask> auraTasks = new ConcurrentHashMap<>();
     public final Map<UUID, BukkitTask> mainAnimationTasks = new ConcurrentHashMap<>();
 }

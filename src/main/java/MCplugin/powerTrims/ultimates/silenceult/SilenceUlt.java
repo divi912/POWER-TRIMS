@@ -100,9 +100,9 @@ public class SilenceUlt implements Listener {
                     animations.startTransformationSequence(player);
                 }
             }
-            case 7 -> { if (isWarden) attacks.tryUseWardenBoom(player); }
-            case 8 -> { if (isWarden) attacks.tryUseDeepDarkGrasp(player); }
-            case 9 -> { if (isWarden) attacks.tryUseObliteratingLeap(player); }
+            case 6 -> { if (isWarden) attacks.tryUseWardenBoom(player); }
+            case 7 -> { if (isWarden) attacks.tryUseDeepDarkGrasp(player); }
+            case 8 -> { if (isWarden) attacks.tryUseObliteratingLeap(player); }
         }
     }
 

@@ -52,62 +52,74 @@ public class SilenceUltAttacks {
     private void chargeWardenBoom(Player player) {
         final UUID playerUUID = player.getUniqueId();
         data.chargingBoomPlayers.add(playerUUID);
-        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 105, 1, true, false)); // Slowness II for 5.25 seconds
+        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 105, 1, true, false));
 
         final List<BlockDisplay> absorbingBlocks = new ArrayList<>();
-        final int chargeDurationTicks = 100; // 5 seconds
+        final int chargeDurationTicks = 100;
+        final int numParticles = 30;
+        final double maxRadius = 5.0;
+
+        for (int i = 0; i < numParticles; i++) {
+            BlockDisplay absorbingBlock = player.getWorld().spawn(player.getEyeLocation(), BlockDisplay.class, bd -> {
+                bd.setBlock(Material.SCULK.createBlockData());
+                Transformation t = bd.getTransformation();
+                t.getScale().set(0.25f);
+                bd.setTransformation(t);
+                bd.setInterpolationDuration(3);
+                bd.setInterpolationDelay(-1);
+            });
+            absorbingBlocks.add(absorbingBlock);
+        }
 
         new BukkitRunnable() {
             int ticks = 0;
+            final double angleStep = (2 * Math.PI) / numParticles;
 
             @Override
             public void run() {
                 if (!player.isOnline() || !data.chargingBoomPlayers.contains(playerUUID)) {
-                    // Canceled externally or player logged off
                     absorbingBlocks.forEach(Entity::remove);
                     data.chargingBoomPlayers.remove(playerUUID);
+                    if (player.isOnline()) {
+                        player.sendTitle("", "", 0, 1, 0); // Clear title
+                    }
                     this.cancel();
                     return;
                 }
+
+                Location center = player.getEyeLocation();
 
                 if (ticks >= chargeDurationTicks) {
                     fireWardenBoom(player);
                     data.wardenBoomCooldowns.put(playerUUID, System.currentTimeMillis());
                     data.chargingBoomPlayers.remove(playerUUID);
                     absorbingBlocks.forEach(Entity::remove);
+                    player.sendTitle("", "", 0, 1, 0);
                     this.cancel();
                     return;
                 }
 
-                Location center = player.getEyeLocation();
-                if (ticks % 4 == 0) {
-                    for (int i = 0; i < 8; i++) {
-                        Location spawnLoc = center.clone().add(Vector.getRandom().subtract(new Vector(0.5, 0.5, 0.5)).normalize().multiply(5));
-                        BlockDisplay absorbingBlock = player.getWorld().spawn(spawnLoc, BlockDisplay.class, bd -> {
-                            bd.setBlock(Material.SCULK.createBlockData());
-                            Transformation t = bd.getTransformation();
-                            t.getScale().set(0.25f);
-                            bd.setTransformation(t);
-                        });
-                        absorbingBlocks.add(absorbingBlock);
-                    }
+                int chargePercentage = (int) (((double) ticks / chargeDurationTicks) * 100);
+                player.sendTitle(ChatColor.DARK_AQUA + "§lSonic Boom", ChatColor.AQUA + "Charging: " + chargePercentage + "%", 0, 10, 5);
+
+                double currentRadius = maxRadius * (1.0 - ((double) ticks / chargeDurationTicks));
+                double rotation = ticks * 0.1;
+
+                for (int i = 0; i < absorbingBlocks.size(); i++) {
+                    BlockDisplay block = absorbingBlocks.get(i);
+                    if (!block.isValid()) continue;
+
+                    double angle = (i * angleStep) + rotation;
+                    double yOffset = (Math.sin((ticks + i * 5) * 0.2) * 0.5);
+
+                    Vector offset = new Vector(Math.cos(angle) * currentRadius, yOffset, Math.sin(angle) * currentRadius);
+                    block.teleport(center.clone().add(offset));
                 }
 
-                absorbingBlocks.removeIf(bd -> {
-                    if (!bd.isValid()) return true;
-                    Vector toPlayer = center.toVector().subtract(bd.getLocation().toVector()).normalize().multiply(0.4);
-                    bd.teleport(bd.getLocation().add(toPlayer));
-                    if (bd.getLocation().distanceSquared(center) < 1.0) {
-                        player.getWorld().spawnParticle(Particle.SCULK_SOUL, bd.getLocation(), 1, 0, 0, 0, 0);
-                        bd.remove();
-                        return true;
-                    }
-                    return false;
-                });
-
-                if (ticks % 20 == 0) {
-                    player.getWorld().playSound(player.getLocation(), Sound.ENTITY_WARDEN_ROAR, 1.5f, 0.8f + ((float)ticks / chargeDurationTicks));
+                if (ticks == 0) {
+                     player.getWorld().playSound(player.getLocation(), Sound.ENTITY_WARDEN_SONIC_CHARGE, 1.5f, 1.0f);
                 }
+                
                 ticks++;
             }
         }.runTaskTimer(plugin, 0L, 1L);

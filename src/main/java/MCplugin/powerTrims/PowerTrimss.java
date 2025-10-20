@@ -138,7 +138,7 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(new SentryTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
         getServer().getPluginManager().registerEvents(new WayfinderTrim(this, cooldownManager, configManager, abilityManager), this);
         getServer().getPluginManager().registerEvents(new RaiserTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
-        getServer().getPluginManager().registerEvents(new WardTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        getServer().getPluginManager().registerEvents(new WardTrim(this, cooldownManager, configManager, abilityManager), this);
         getServer().getPluginManager().registerEvents(new SpireTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
         getServer().getPluginManager().registerEvents(new HostTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
         getServer().getPluginManager().registerEvents(new SnoutTrim(this,cooldownManager, trustManager, configManager, abilityManager), this);
