@@ -26,6 +26,7 @@ public class VexTrim implements Listener {
     private final ConfigManager configManager;
     private final AbilityManager abilityManager;
     private final Map<UUID, Long> passiveCooldowns = new HashMap<>();
+    private final Set<UUID> hiddenPlayers = new HashSet<>();
     private final long PRIMARY_COOLDOWN;
     private final double PRIMARY_RADIUS;
     private final double PRIMARY_DAMAGE;
@@ -137,6 +138,7 @@ public class VexTrim implements Listener {
 
     private void activatePassiveAbility(Player player) {
         passiveCooldowns.put(player.getUniqueId(), System.currentTimeMillis() + PASSIVE_COOLDOWN);
+        hiddenPlayers.add(player.getUniqueId());
         for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
             if (!onlinePlayer.equals(player)) {
                 onlinePlayer.hidePlayer(plugin, player);
@@ -148,6 +150,7 @@ public class VexTrim implements Listener {
         new BukkitRunnable() {
             @Override
             public void run() {
+                hiddenPlayers.remove(player.getUniqueId());
                 for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
                     onlinePlayer.showPlayer(plugin, player);
                 }
@@ -159,5 +162,17 @@ public class VexTrim implements Listener {
     private boolean isPassiveOnCooldown(Player player) {
         return passiveCooldowns.containsKey(player.getUniqueId()) &&
                 passiveCooldowns.get(player.getUniqueId()) > System.currentTimeMillis();
+    }
+
+    public void cleanup() {
+        for (UUID playerUUID : hiddenPlayers) {
+            Player player = Bukkit.getPlayer(playerUUID);
+            if (player != null) {
+                for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+                    onlinePlayer.showPlayer(plugin, player);
+                }
+            }
+        }
+        hiddenPlayers.clear();
     }
 }

@@ -27,7 +27,7 @@ trims:
   flow: true
   bolt: true
 
-cooldown-display: SCOREBOARD  # Options: SCOREBOARD, ACTION_BAR. Default is Scoreboard
+cooldown-display: ACTION_BAR  # Options: SCOREBOARD, ACTION_BAR. Default is Scoreboard
 
   # POWER-TRIMS Configuration
 sentry:

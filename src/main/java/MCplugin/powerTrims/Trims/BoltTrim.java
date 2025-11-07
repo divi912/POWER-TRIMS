@@ -33,6 +33,7 @@ public class BoltTrim implements Listener {
     private final TrimCooldownManager cooldownManager;
     private final PersistentTrustManager trustManager;
     private final ConfigManager configManager;
+    private final List<BlockDisplay> activeLightningParts = new ArrayList<>();
 
     public BoltTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager) {
         this.plugin = plugin;
@@ -110,7 +111,6 @@ public class BoltTrim implements Listener {
         World world = targetLocation.getWorld();
         if (world == null) return;
 
-        final List<BlockDisplay> lightningParts = new ArrayList<>();
         final Material lightningMaterial = Material.CYAN_WOOL;
         final int lifeTicks = 10; 
 
@@ -135,15 +135,16 @@ public class BoltTrim implements Listener {
                 bd.setTransformation(t);
                 bd.setBrightness(new BlockDisplay.Brightness(15, 15));
             });
-            lightningParts.add(part);
+            activeLightningParts.add(part);
         }
 
         new BukkitRunnable() {
             @Override
             public void run() {
-                for (BlockDisplay part : lightningParts) {
+                for (BlockDisplay part : activeLightningParts) {
                     part.remove();
                 }
+                activeLightningParts.clear();
             }
         }.runTaskLater(plugin, lifeTicks);
 
@@ -155,7 +156,6 @@ public class BoltTrim implements Listener {
         World world = start.getWorld();
         if (world == null) return;
 
-        final List<BlockDisplay> arcParts = new ArrayList<>();
         final Material lightningMaterial = Material.CYAN_WOOL;
         final int lifeTicks = 8;
 
@@ -176,15 +176,16 @@ public class BoltTrim implements Listener {
                 bd.setTransformation(t);
                 bd.setBrightness(new BlockDisplay.Brightness(15, 15));
             });
-            arcParts.add(part);
+            activeLightningParts.add(part);
         }
 
         new BukkitRunnable() {
             @Override
             public void run() {
-                for (BlockDisplay part : arcParts) {
+                for (BlockDisplay part : activeLightningParts) {
                     part.remove();
                 }
+                activeLightningParts.clear();
             }
         }.runTaskLater(plugin, lifeTicks);
     }
@@ -239,5 +240,12 @@ public class BoltTrim implements Listener {
                 .append(Component.text("Chain Lightning", NamedTextColor.YELLOW))
                 .append(Component.text("!", NamedTextColor.GRAY));
         player.sendMessage(message);
+    }
+
+    public void cleanup() {
+        for (BlockDisplay part : activeLightningParts) {
+            part.remove();
+        }
+        activeLightningParts.clear();
     }
 }

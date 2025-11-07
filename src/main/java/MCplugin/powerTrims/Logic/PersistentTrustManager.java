@@ -69,19 +69,20 @@ public class PersistentTrustManager {
         }
     }
 
-    private void clearConfig() { // New method to clear the config
+    public void saveTrusts() {
+        // Clear existing config before saving
         for (String key : trustConfig.getKeys(false)) {
             trustConfig.set(key, null);
         }
-    }
 
-    public void saveTrusts() {
         // Save trust relationships to the YAML file
         for (Map.Entry<UUID, Set<UUID>> entry : trustedPlayers.entrySet()) {
             String uuidStr = entry.getKey().toString();
+            List<String> trustedUUIDs = new ArrayList<>();
             for (UUID trustedUUID : entry.getValue()) {
-                trustConfig.set(uuidStr + "." + trustedUUID.toString(), true);
+                trustedUUIDs.add(trustedUUID.toString());
             }
+            trustConfig.set(uuidStr, trustedUUIDs);
         }
         try {
             trustConfig.save(trustFile);
@@ -117,8 +118,6 @@ public class PersistentTrustManager {
             return;
         }
         trustList.add(trusted);
-        clearConfig(); // Clear config *before* saving
-        saveTrusts();
         Player trustedPlayer = plugin.getServer().getPlayer(trusted);
         String trustedName = (trustedPlayer != null) ? trustedPlayer.getName() : trusted.toString().substring(0, 8);
         sendMessage(sender, "&aYou have trusted " + trustedName + ".", "%player%", trustedName);
@@ -134,8 +133,6 @@ public class PersistentTrustManager {
         if (trustList.isEmpty()) {
             trustedPlayers.remove(player);
         }
-        clearConfig(); // Clear config *before* saving
-        saveTrusts();
         Player untrustedPlayer = plugin.getServer().getPlayer(trusted);
         String untrustedName = (untrustedPlayer != null) ? untrustedPlayer.getName() : trusted.toString().substring(0, 8);
         sendMessage(sender, "&cYou have untrusted " + untrustedName + ".", "%player%", untrustedName);

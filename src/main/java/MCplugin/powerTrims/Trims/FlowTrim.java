@@ -224,4 +224,15 @@ public class FlowTrim implements Listener {
             }
         }
     }
+
+    public void cleanup() {
+        for (UUID playerUUID : dashTasks.keySet()) {
+            Player player = Bukkit.getPlayer(playerUUID);
+            if (player != null) {
+                deactivateDash(player, "Dash deactivated due to plugin reload.");
+            }
+        }
+        dashTasks.clear();
+        isDashing.clear();
+    }
 }

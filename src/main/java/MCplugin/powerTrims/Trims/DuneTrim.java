@@ -15,6 +15,7 @@ import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
 import java.util.ArrayList;
@@ -37,6 +38,8 @@ public class DuneTrim implements Listener {
     private static final List<Material> SAND_MATERIALS = List.of(
             Material.SAND, Material.SANDSTONE, Material.RED_SAND, Material.SMOOTH_SANDSTONE, Material.CUT_SANDSTONE
     );
+
+    private final List<BukkitTask> activeTornadoTasks = new ArrayList<>();
 
     private record TornadoParticle(BlockDisplay display, double height, double radius, double speed, double startAngle) {}
 
@@ -63,7 +66,7 @@ public class DuneTrim implements Listener {
         if (!ArmourChecking.hasFullTrimmedArmor(player, TrimPattern.DUNE)) return;
         if (cooldownManager.isOnCooldown(player, TrimPattern.DUNE)) return;
         if (Bukkit.getPluginManager().isPluginEnabled("WorldGuard") && !WorldGuardIntegration.canUseAbilities(player)) {
-            Messaging.sendError(player, "You cannot use this ability in the current region.");
+            Messaging.sendError(player, "You must be looking at the ground to summon the tornado.");
             return;
         }
 
@@ -158,9 +161,10 @@ public class DuneTrim implements Listener {
                 for (TornadoParticle particle : particles) {
                     if (particle.display.isValid()) particle.display.remove();
                 }
+                activeTornadoTasks.remove(this);
             }
         };
-        tornadoTask.runTaskTimer(plugin, 0L, 4L);
+        activeTornadoTasks.add(tornadoTask.runTaskTimer(plugin, 0L, 4L));
     }
 
     @EventHandler
@@ -169,5 +173,12 @@ public class DuneTrim implements Listener {
             event.setCancelled(true);
             abilityManager.activatePrimaryAbility(event.getPlayer());
         }
+    }
+
+    public void cleanup() {
+        for (BukkitTask task : activeTornadoTasks) {
+            task.cancel();
+        }
+        activeTornadoTasks.clear();
     }
 }

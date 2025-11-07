@@ -1,14 +1,14 @@
 package MCplugin.powerTrims.integrations;
 
 import com.sk89q.worldedit.bukkit.BukkitAdapter;
-import com.sk89q.worldedit.util.Location;
+import com.sk89q.worldguard.LocalPlayer;
 import com.sk89q.worldguard.WorldGuard;
-import com.sk89q.worldguard.bukkit.WorldGuardPlugin; // <-- ADD THIS IMPORT
 import com.sk89q.worldguard.protection.flags.Flag;
 import com.sk89q.worldguard.protection.flags.StateFlag;
 import com.sk89q.worldguard.protection.flags.registry.FlagRegistry;
 import com.sk89q.worldguard.protection.regions.RegionContainer;
 import com.sk89q.worldguard.protection.regions.RegionQuery;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 public class WorldGuardIntegration {
@@ -16,6 +16,10 @@ public class WorldGuardIntegration {
     public static StateFlag USE_TRIM_ABILITIES;
 
     public static void registerFlags() {
+        if (Bukkit.getPluginManager().getPlugin("WorldGuard") == null) {
+            return; // WorldGuard not found
+        }
+
         FlagRegistry registry = WorldGuard.getInstance().getFlagRegistry();
         final String flagName = "powertrims-abilities";
 
@@ -34,7 +38,7 @@ public class WorldGuardIntegration {
     }
 
     public static boolean canUseAbilities(Player player) {
-        if (USE_TRIM_ABILITIES == null) {
+        if (USE_TRIM_ABILITIES == null || Bukkit.getPluginManager().getPlugin("WorldGuard") == null) {
             return true;
         }
 
@@ -43,7 +47,7 @@ public class WorldGuardIntegration {
 
         return query.testState(
                 BukkitAdapter.adapt(player.getLocation()),
-                WorldGuardPlugin.inst().wrapPlayer(player),
+                (LocalPlayer) WorldGuard.getInstance().getPlatform().getSessionManager().get((LocalPlayer) BukkitAdapter.adapt(player)),
                 USE_TRIM_ABILITIES
         );
     }

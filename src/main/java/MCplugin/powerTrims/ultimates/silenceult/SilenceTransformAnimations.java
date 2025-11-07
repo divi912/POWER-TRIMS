@@ -23,13 +23,13 @@ public class SilenceTransformAnimations {
 
     private final JavaPlugin plugin;
     private final SilenceUlt silenceUlt;
-    private final SilenceUltData data;
+    private static SilenceUltData data;
     private final Random random = new Random();
 
     public SilenceTransformAnimations(JavaPlugin plugin, SilenceUlt silenceUlt, SilenceUltData data) {
         this.plugin = plugin;
         this.silenceUlt = silenceUlt;
-        this.data = data;
+        SilenceTransformAnimations.data = data;
     }
 
     public void startTransformationSequence(Player player) {
@@ -66,16 +66,18 @@ public class SilenceTransformAnimations {
                     return;
                 }
 
-                world.setTime(world.getTime() + 1200);
+                // Removed global world time modification
 
-                if (ticks % 3 == 0) {
+                if (ticks % 10 == 0) { // Reduced frequency of lightning effects
                     double offsetX = (random.nextDouble() - 0.5) * SilenceUltData.LIGHTNING_RANDOM_OFFSET * 4;
                     double offsetZ = (random.nextDouble() - 0.5) * SilenceUltData.LIGHTNING_RANDOM_OFFSET * 4;
                     world.strikeLightningEffect(player.getLocation().clone().add(offsetX, 0, offsetZ));
                 }
 
-                // --- MODIFIED: Use the new eyesight locking method ---
-                lockNearbyPlayerEyesight(player);
+                // Apply darkness to nearby players instead of forced eyesight manipulation
+                if (ticks % 4 == 0) {
+                    lockNearbyPlayerEyesight(player);
+                }
 
                 ticks++;
             }
@@ -121,8 +123,10 @@ public class SilenceTransformAnimations {
                 World world = loc.getWorld();
                 double progress = (double) ticks / totalDurationTicks;
 
-                // --- ADDED: Lock nearby players' eyesight during the main animation ---
-                lockNearbyPlayerEyesight(player);
+                // Apply darkness to nearby players instead of forced eyesight manipulation
+                if (ticks % 4 == 0) {
+                    lockNearbyPlayerEyesight(player);
+                }
 
                 // --- Sculk Shell Animation ---
                 double shellGrowthFactor = Math.sin(progress * Math.PI / 2);
@@ -184,11 +188,7 @@ public class SilenceTransformAnimations {
         }.runTaskTimer(plugin, 0L, 1L));
     }
 
-    /**
-     * Finds all players within a radius of the target and forces them to look at the target.
-     *
-     * @param targetPlayer The player to look at.
-     */
+
     private void lockNearbyPlayerEyesight(Player targetPlayer) {
         Location targetLocation = targetPlayer.getEyeLocation();
         for (Entity entity : targetPlayer.getWorld().getNearbyEntities(targetLocation, 30.0, 30.0, 30.0)) {
@@ -208,7 +208,8 @@ public class SilenceTransformAnimations {
         List<Vector> offsets = new ArrayList<>();
         float playerHeight = 2.8f;
         float playerWidth = 1.0f;
-        int density = 20;
+        // MODIFICATION: Reduced density to decrease entity count and network load
+        int density = 14;
 
         float headRadius = playerWidth / 2 + 0.2f;
         for (int i = 0; i < density; i++) {
@@ -310,13 +311,15 @@ public class SilenceTransformAnimations {
         }.runTaskTimer(plugin, 0L, 1L);
     }
 
-    public void revertSculkBlocks(UUID playerUUID) {
-        Map<Location, BlockData> playerOriginals = data.originalBlocks.get(playerUUID);
-        if (playerOriginals == null || playerOriginals.isEmpty()) return;
-        for (Map.Entry<Location, BlockData> entry : playerOriginals.entrySet()) {
-            if (entry.getKey().isWorldLoaded()) {
-                entry.getKey().getBlock().setBlockData(entry.getValue());
+    public static void revertSculkBlocks() {
+        for (Map<Location, BlockData> playerOriginals : data.originalBlocks.values()) {
+            if (playerOriginals == null || playerOriginals.isEmpty()) continue;
+            for (Map.Entry<Location, BlockData> entry : playerOriginals.entrySet()) {
+                if (entry.getKey().isWorldLoaded()) {
+                    entry.getKey().getBlock().setBlockData(entry.getValue());
+                }
             }
         }
+        data.originalBlocks.clear();
     }
 }

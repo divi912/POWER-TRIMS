@@ -6,7 +6,7 @@
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * [ POWER TRIMS ] is distributed in the hope that it will be useful,
+ * [ POWER TRIMS] is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
@@ -24,12 +24,18 @@ import MCplugin.powerTrims.Trims.*;
 import MCplugin.powerTrims.UltimateUpgrader.RitualManager;
 import MCplugin.powerTrims.UltimateUpgrader.UltimateUpgraderManager;
 import MCplugin.powerTrims.commands.PowerTrimsCommand;
+import MCplugin.powerTrims.commands.TrustCommand;
+import MCplugin.powerTrims.commands.UntrustCommand;
+import MCplugin.powerTrims.commands.TrustListCommand;
 import MCplugin.powerTrims.config.ConfigManager;
 import MCplugin.powerTrims.integrations.PlaceholderIntegration;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import MCplugin.powerTrims.integrations.geyser.DoubleSneakManager;
+import MCplugin.powerTrims.ultimates.silenceult.SilenceTransformAnimations;
 import MCplugin.powerTrims.ultimates.silenceult.SilenceUlt;
+import MCplugin.powerTrims.ultimates.silenceult.SilenceUltData;
 import com.jeff_media.armorequipevent.ArmorEquipEvent;
+import me.libraryaddict.disguise.DisguiseAPI;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.NamespacedKey;
@@ -57,6 +63,15 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
     private UltimateUpgraderManager ultimateUpgraderManager;
     private NamespacedKey upgradeKey;
     private SilenceUlt silenceUlt;
+    private SilenceUltData silenceUltData;
+    private EyeTrim eyeTrim;
+    private RibTrim ribTrim;
+    private VexTrim vexTrim;
+    private BoltTrim boltTrim;
+    private PlaceholderIntegration placeholderIntegration;
+    private CoastTrim coastTrim;
+    private DuneTrim duneTrim;
+    private FlowTrim flowTrim;
 
     @Override
     public void onLoad() {
@@ -86,10 +101,9 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         this.ultimateUpgraderManager = new UltimateUpgraderManager(this, ritualManager, upgradeKey, configManager);
 
         if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
-            new PlaceholderIntegration(this).register();
+            placeholderIntegration = new PlaceholderIntegration(this);
+            placeholderIntegration.register();
         }
-
-
         registerTrimAbilities();
 
         ArmorEquipEvent.registerListener(this);
@@ -98,6 +112,20 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(new LoreChanger(), this);
 
         Objects.requireNonNull(getCommand("powertrims")).setExecutor(new PowerTrimsCommand(this, configManager, cooldownManager, trustManager));
+        Objects.requireNonNull(getCommand("trust")).setExecutor(new TrustCommand(trustManager));
+        Objects.requireNonNull(getCommand("untrust")).setExecutor(new UntrustCommand(trustManager));
+        Objects.requireNonNull(getCommand("trustlist")).setExecutor(new TrustListCommand(trustManager));
+
+        // Cleanup any players that were in a warden state when the server stopped
+        if (silenceUlt != null) {
+            silenceUltData.loadOriginalBlocks();
+            SilenceTransformAnimations.revertSculkBlocks();
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                if (DisguiseAPI.isDisguised(player)) {
+                    silenceUlt.revertFromWarden(player, false);
+                }
+            }
+        }
 
         getLogger().info(ChatColor.GREEN + "--------------------------------------");
         getLogger().info(ChatColor.GOLD + "   Thanks for using PowerTrims!");
@@ -108,6 +136,7 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
     public void reloadPlugin() {
         HandlerList.unregisterAll((Plugin) this);
         configManager.reloadConfig();
+        ritualManager.reload(); // Reload ritual configs and counts
         registerTrimAbilities();
         ArmorEquipEvent.registerListener(this);
         this.trimEffectManager = new TrimEffectManager(this, configManager);
@@ -122,19 +151,30 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
     private void registerTrimAbilities() {
         // Create and register the single instance of SilenceUlt
-        this.silenceUlt = new SilenceUlt(this, upgradeKey);
-        getServer().getPluginManager().registerEvents(this.silenceUlt, this);
+        if (Bukkit.getPluginManager().getPlugin("LibsDisguises") != null) {
+            this.silenceUltData = new SilenceUltData(this);
+            this.silenceUlt = new SilenceUlt(this, upgradeKey, silenceUltData);
+            getServer().getPluginManager().registerEvents(this.silenceUlt, this);
+        } else {
+            getLogger().warning("LibsDisguises not found, Silence Ultimate will be disabled.");
+        }
 
         // Register other trims
         getServer().getPluginManager().registerEvents(new SilenceTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
         getServer().getPluginManager().registerEvents(new WildTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
-        getServer().getPluginManager().registerEvents(new VexTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        this.vexTrim = new VexTrim(this, cooldownManager, trustManager, configManager, abilityManager);
+        getServer().getPluginManager().registerEvents(vexTrim, this);
         getServer().getPluginManager().registerEvents(new TideTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
-        getServer().getPluginManager().registerEvents(new EyeTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
-        getServer().getPluginManager().registerEvents(new RibTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
-        getServer().getPluginManager().registerEvents(new FlowTrim(this, cooldownManager, configManager, abilityManager), this);
-        getServer().getPluginManager().registerEvents(new CoastTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
-        getServer().getPluginManager().registerEvents(new DuneTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        this.eyeTrim = new EyeTrim(this, cooldownManager, trustManager, configManager, abilityManager);
+        getServer().getPluginManager().registerEvents(eyeTrim, this);
+        this.ribTrim = new RibTrim(this, cooldownManager, trustManager, configManager, abilityManager);
+        getServer().getPluginManager().registerEvents(ribTrim, this);
+        this.flowTrim = new FlowTrim(this, cooldownManager, configManager, abilityManager);
+        getServer().getPluginManager().registerEvents(flowTrim, this);
+        this.coastTrim = new CoastTrim(this, cooldownManager, trustManager, configManager, abilityManager);
+        getServer().getPluginManager().registerEvents(coastTrim, this);
+        this.duneTrim = new DuneTrim(this, cooldownManager, trustManager, configManager, abilityManager);
+        getServer().getPluginManager().registerEvents(duneTrim, this);
         getServer().getPluginManager().registerEvents(new SentryTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
         getServer().getPluginManager().registerEvents(new WayfinderTrim(this, cooldownManager, configManager, abilityManager), this);
         getServer().getPluginManager().registerEvents(new RaiserTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
@@ -142,7 +182,8 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         getServer().getPluginManager().registerEvents(new SpireTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
         getServer().getPluginManager().registerEvents(new HostTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
         getServer().getPluginManager().registerEvents(new SnoutTrim(this,cooldownManager, trustManager, configManager, abilityManager), this);
-        getServer().getPluginManager().registerEvents(new BoltTrim(this, cooldownManager, trustManager, configManager), this);
+        this.boltTrim = new BoltTrim(this, cooldownManager, trustManager, configManager);
+        getServer().getPluginManager().registerEvents(boltTrim, this);
     }
 
     private void setConfigDefaults() {
@@ -303,14 +344,44 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
     @Override
     public void onDisable() {
 
-        if (cooldownManager != null) {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                cooldownManager.removeScoreboard(player);
-            }
-        }
-
         if (trustManager != null) {
             trustManager.saveTrusts();
+        }
+
+        if (silenceUltData != null) {
+            silenceUltData.saveOriginalBlocks();
+        }
+
+        if (eyeTrim != null) {
+            eyeTrim.cleanup();
+        }
+
+        if (ribTrim != null) {
+            ribTrim.cleanup();
+        }
+
+        if (vexTrim != null) {
+            vexTrim.cleanup();
+        }
+
+        if (boltTrim != null) {
+            boltTrim.cleanup();
+        }
+
+        if (placeholderIntegration != null) {
+            placeholderIntegration.cleanup();
+        }
+
+        if (coastTrim != null) {
+            coastTrim.cleanup();
+        }
+
+        if (duneTrim != null) {
+            duneTrim.cleanup();
+        }
+
+        if (flowTrim != null) {
+            flowTrim.cleanup();
         }
 
         getLogger().info(ChatColor.RED + "--------------------------------------");

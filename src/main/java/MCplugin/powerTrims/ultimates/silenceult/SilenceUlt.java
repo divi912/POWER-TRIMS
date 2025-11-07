@@ -35,9 +35,9 @@ public class SilenceUlt implements Listener {
     private final SilenceUltAttacks attacks;
     private final NamespacedKey upgradeKey;
 
-    public SilenceUlt(JavaPlugin plugin, NamespacedKey upgradeKey) {
+    public SilenceUlt(JavaPlugin plugin, NamespacedKey upgradeKey, SilenceUltData data) {
         this.plugin = plugin;
-        this.data = new SilenceUltData();
+        this.data = data;
         this.animations = new SilenceTransformAnimations(plugin, this, data);
         this.attacks = new SilenceUltAttacks(plugin, this, data);
         this.upgradeKey = upgradeKey;
@@ -65,11 +65,20 @@ public class SilenceUlt implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onDamage(EntityDamageByEntityEvent event) {
-        if (event.getEntity() instanceof Player player && ArmourChecking.hasFullUpgradedArmor(player, TrimPattern.SILENCE, upgradeKey)) {
-            addRage(player, SilenceUltData.RAGE_PER_HIT_TAKEN);
+        boolean rageGainApplied = false;
+
+        if (event.getEntity() instanceof Player player) {
+            if (ArmourChecking.hasFullUpgradedArmor(player, TrimPattern.SILENCE, upgradeKey)) {
+                addRage(player, SilenceUltData.RAGE_PER_HIT_TAKEN);
+                rageGainApplied = true;
+            }
         }
+
         if (event.getDamager() instanceof Player player && ArmourChecking.hasFullUpgradedArmor(player, TrimPattern.SILENCE, upgradeKey)) {
-            addRage(player, SilenceUltData.RAGE_PER_HIT_DEALT);
+            // Only add rage if it hasn't been applied for the other player
+            if (!rageGainApplied) {
+                addRage(player, SilenceUltData.RAGE_PER_HIT_DEALT);
+            }
         }
     }
 
@@ -181,7 +190,7 @@ public class SilenceUlt implements Listener {
         BukkitTask task = new BukkitRunnable() {
             @Override
             public void run() {
-                if (!player.isOnline() || !DisguiseAPI.isDisguised(player)) {
+                if (!player.isOnline() || !data.wardenEndTimes.containsKey(playerUUID)) {
                     revertFromWarden(player, true);
                     this.cancel();
                     return;
@@ -236,7 +245,7 @@ public class SilenceUlt implements Listener {
     }
 
     public void cleanupPlayer(UUID playerUUID) {
-        animations.revertSculkBlocks(playerUUID);
+        animations.revertSculkBlocks();
         data.originalBlocks.remove(playerUUID);
         if (data.sculkTasks.containsKey(playerUUID)) data.sculkTasks.remove(playerUUID).cancel();
         if (data.mainAnimationTasks.containsKey(playerUUID)) data.mainAnimationTasks.remove(playerUUID).cancel();

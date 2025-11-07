@@ -89,4 +89,8 @@ public class PlaceholderIntegration extends PlaceholderExpansion {
                 return null;
         }
     }
+
+    public void cleanup() {
+        this.unregister();
+    }
 }

@@ -37,12 +37,12 @@ public class UltimateUpgraderManager implements Listener, CommandExecutor, Inven
     private final String GUI_NAME = "§5Ultimate Upgrader";
     private final NamespacedKey upgradeKey;
 
-    private static final int HELMET_SLOT = 10;
-    private static final int CHESTPLATE_SLOT = 12;
-    private static final int LEGGINGS_SLOT = 14;
-    private static final int BOOTS_SLOT = 16;
+    public static final int HELMET_SLOT = 10;
+    public static final int CHESTPLATE_SLOT = 12;
+    public static final int LEGGINGS_SLOT = 14;
+    public static final int BOOTS_SLOT = 16;
     private static final int UPGRADE_BUTTON_SLOT = 22;
-    private static final Set<Integer> ARMOR_SLOTS = new HashSet<>(Arrays.asList(HELMET_SLOT, CHESTPLATE_SLOT, LEGGINGS_SLOT, BOOTS_SLOT));
+    public static final Set<Integer> ARMOR_SLOTS = new HashSet<>(Arrays.asList(HELMET_SLOT, CHESTPLATE_SLOT, LEGGINGS_SLOT, BOOTS_SLOT));
 
     public UltimateUpgraderManager(JavaPlugin plugin, RitualManager ritualManager, NamespacedKey upgradeKey, ConfigManager configManager) {
         this.ritualManager = ritualManager;
@@ -105,6 +105,12 @@ public class UltimateUpgraderManager implements Listener, CommandExecutor, Inven
 
         if (event.getView().getTopInventory().equals(clickedInventory)) {
             if (ARMOR_SLOTS.contains(rawSlot)) {
+                return; // Allow placing/taking armor
+            }
+
+            // Prevent shift-clicking items into the GUI from the player's inventory
+            if (event.isShiftClick()) {
+                event.setCancelled(true);
                 return;
             }
 
@@ -114,8 +120,10 @@ public class UltimateUpgraderManager implements Listener, CommandExecutor, Inven
                 return;
             }
 
+            // Cancel all other clicks in the top inventory
             event.setCancelled(true);
         } else if (event.isShiftClick() && clickedInventory != null && clickedInventory.equals(event.getView().getBottomInventory())) {
+            // Also explicitly cancel shift-clicks from the bottom inventory
             event.setCancelled(true);
         }
     }
@@ -186,26 +194,30 @@ public class UltimateUpgraderManager implements Listener, CommandExecutor, Inven
             return;
         }
 
-        consumeMaterials(player, config.getMaterials());
-        for (int slot : ARMOR_SLOTS) {
-            gui.setItem(slot, null);
-        }
+        // Pass responsibility to the RitualManager to handle items atomically
+        ritualManager.startRitual(player, armorSet, config, gui);
 
         player.closeInventory();
         player.sendMessage("§aThe ritual has begun!");
-        ritualManager.startRitual(player, armorSet, config);
     }
 
     private boolean hasRequiredMaterials(Player player, List<ItemStack> materials) {
         for (ItemStack material : materials) {
-            if (!player.getInventory().containsAtLeast(material, material.getAmount())) {
+            int requiredAmount = material.getAmount();
+            int foundAmount = 0;
+            for (ItemStack item : player.getInventory().getContents()) {
+                if (item != null && item.getType() == material.getType()) {
+                    foundAmount += item.getAmount();
+                }
+            }
+            if (foundAmount < requiredAmount) {
                 return false;
             }
         }
         return true;
     }
 
-    private void consumeMaterials(Player player, List<ItemStack> materials) {
+    public void consumeMaterials(Player player, List<ItemStack> materials) {
         for (ItemStack material : materials) {
             player.getInventory().removeItem(material);
         }
@@ -213,13 +225,14 @@ public class UltimateUpgraderManager implements Listener, CommandExecutor, Inven
 
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
-        if (!(event.getInventory().getHolder() instanceof UltimateUpgraderManager)) return;
-
-        Inventory gui = event.getInventory();
-        for (int slot : ARMOR_SLOTS) {
-            ItemStack item = gui.getItem(slot);
-            if (item != null && item.getType() != Material.AIR) {
-                event.getPlayer().getInventory().addItem(item);
+        // Only act if the ritual is NOT in progress for this player
+        if (event.getInventory().getHolder() instanceof UltimateUpgraderManager && !ritualManager.isPlayerInRitual(event.getPlayer().getUniqueId())) {
+            Inventory gui = event.getInventory();
+            for (int slot : ARMOR_SLOTS) {
+                ItemStack item = gui.getItem(slot);
+                if (item != null && item.getType() != Material.AIR) {
+                    event.getPlayer().getInventory().addItem(item);
+                }
             }
         }
     }

@@ -7,6 +7,7 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.trim.TrimPattern;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -35,6 +36,14 @@ public class RitualManager {
         loadUpgradeCounts();
     }
 
+    public void reload() {
+        ritualConfigs.clear();
+        loadRituals();
+        upgradeCountsConfig = null; // Force a fresh read from the file
+        loadUpgradeCounts();
+        plugin.getLogger().info("Ritual configurations and upgrade counts have been reloaded.");
+    }
+
     public void loadRituals() {
         File ritualsFile = new File(plugin.getDataFolder(), "rituals.yml");
         if (!ritualsFile.exists()) {
@@ -55,9 +64,9 @@ public class RitualManager {
                     continue;
                 }
 
-                boolean enabled = ritualsSection.getBoolean(key + ".enabled", true);
                 int duration = ritualsSection.getInt(key + ".duration");
-                int limit = ritualsSection.getInt(key + ".limit", -1);
+                int limit = ritualsSection.getInt(key + ".limit", 1);
+                boolean enabled = ritualsSection.getBoolean(key + ".enabled", true);
                 List<ItemStack> materials = new ArrayList<>();
                 for (String materialString : ritualsSection.getStringList(key + ".materials")) {
                     String[] parts = materialString.split(":");
@@ -106,7 +115,13 @@ public class RitualManager {
         return activeRituals.containsKey(playerUUID);
     }
 
-    public void startRitual(Player player, ItemStack[] armorSet, RitualConfig config) {
+    public void startRitual(Player player, ItemStack[] armorSet, RitualConfig config, Inventory gui) {
+        // Consume materials and clear armor from GUI here, ensuring atomicity
+        consumeMaterials(player, config.getMaterials());
+        for (int slot : UltimateUpgraderManager.ARMOR_SLOTS) {
+            gui.setItem(slot, null);
+        }
+
         Ritual ritual = new Ritual(plugin, player, player.getLocation(), armorSet, config, this, upgradeKey);
         activeRituals.put(player.getUniqueId(), ritual);
         ritual.start();
@@ -114,5 +129,11 @@ public class RitualManager {
 
     public void endRitual(UUID playerUUID) {
         activeRituals.remove(playerUUID);
+    }
+
+    private void consumeMaterials(Player player, List<ItemStack> materials) {
+        for (ItemStack material : materials) {
+            player.getInventory().removeItem(material);
+        }
     }
 }

@@ -30,7 +30,7 @@ public class RitualAnimation {
 
     public RitualAnimation(JavaPlugin plugin, Location center, ItemStack[] armorSet, List<ItemStack> materials) {
         this.plugin = plugin;
-        this.center = center.clone().add(0, 0.2, 0); // Raise center slightly off the ground
+        this.center = center.clone().add(0, 0.2, 0);
         this.armorSet = armorSet;
         this.materials = materials;
     }
@@ -38,8 +38,7 @@ public class RitualAnimation {
     public void start() {
         World world = center.getWorld();
 
-        // Hologram
-        hologram = world.spawn(center.clone().add(0, 5.5, 0), ArmorStand.class, as -> { // <<< CHANGED: Raised hologram
+        hologram = world.spawn(center.clone().add(0, 5.5, 0), ArmorStand.class, as -> {
             as.setInvisible(true);
             as.setGravity(false);
             as.setInvulnerable(true);
@@ -47,25 +46,22 @@ public class RitualAnimation {
         });
         ritualEntities.add(hologram);
 
-        // Central Pedestal
         BlockDisplay centralPedestal = world.spawn(center.clone(), BlockDisplay.class, bd -> {
             bd.setBlock(Material.CRYING_OBSIDIAN.createBlockData());
             bd.setBrightness(new Display.Brightness(15, 15));
             Transformation t = bd.getTransformation();
             t.getScale().set(0.8f, 0.3f, 0.8f);
-            t.getLeftRotation().identity(); // **FIX: Ensures it is perfectly straight**
+            t.getLeftRotation().identity();
             bd.setTransformation(t);
         });
         ritualEntities.add(centralPedestal);
 
-        // Ritual Pillars at cardinal directions
-        double pillarDistance = 7.0; // <<< CHANGED: Increased pillar distance
-        createPillar(center.clone().add(pillarDistance, 0, 0)); // East
-        createPillar(center.clone().add(-pillarDistance, 0, 0)); // West
-        createPillar(center.clone().add(0, 0, pillarDistance)); // South
-        createPillar(center.clone().add(0, 0, -pillarDistance)); // North
+        double pillarDistance = 7.0;
+        createPillar(center.clone().add(pillarDistance, 0, 0));
+        createPillar(center.clone().add(-pillarDistance, 0, 0));
+        createPillar(center.clone().add(0, 0, pillarDistance));
+        createPillar(center.clone().add(0, 0, -pillarDistance));
 
-        // Floating Armor
         float[] armorYOffsets = {2.5f, 2.0f, 1.5f, 1.0f};
         for (int i = 0; i < armorSet.length; i++) {
             int finalI = i;
@@ -120,18 +116,18 @@ public class RitualAnimation {
             bd.setBrightness(new Display.Brightness(10, 10));
             Transformation t = bd.getTransformation();
             t.getScale().set(0.6f, 2.5f, 0.6f);
-            t.getTranslation().set(-0.3f, 0f, -0.3f);
             t.getLeftRotation().identity();
             bd.setTransformation(t);
         });
         ritualEntities.add(pillarBase);
+
         BlockDisplay crystal = location.getWorld().spawn(location.clone().add(0, 2.5, 0), BlockDisplay.class, bd -> {
             bd.setBlock(Material.AMETHYST_BLOCK.createBlockData());
             bd.setBrightness(new Display.Brightness(15, 15));
             bd.setGlowing(true);
             Transformation t = bd.getTransformation();
             t.getScale().set(0.6f);
-            t.getLeftRotation().set(new Quaternionf().rotateY(0.785f).rotateX(0.785f));
+            t.getLeftRotation().identity();
             bd.setTransformation(t);
         });
         pillarCrystals.add(crystal);
@@ -140,17 +136,15 @@ public class RitualAnimation {
 
     private void drawRuneCircles(double currentAngle) {
         World world = center.getWorld();
-        int points = 120;
-
+        int points = 60; // Reduced from 120
 
         double radius1 = 5.5;
         for (int i = 0; i < points; i++) {
             double angle = (2 * Math.PI * i) / points;
             double x = Math.cos(angle + currentAngle) * radius1;
             double z = Math.sin(angle + currentAngle) * radius1;
-            world.spawnParticle(Particle.DUST, center.clone().add(x, 0.1, z), 1, 0, 0, 0, 0, new Particle.DustOptions(Color.RED, 1.2f));
+            world.spawnParticle(Particle.DUST, center.clone().add(x, 0.1, z), 1, 0, 0, 0, 0, new Particle.DustOptions(Color.RED, 1.0f));
         }
-
 
         double radius2 = 4.0;
         for (int i = 0; i < points; i++) {
@@ -176,7 +170,10 @@ public class RitualAnimation {
             Display display = materialStack.getType().isBlock() ?
                     world.spawn(spawnLoc, BlockDisplay.class, d -> {
                         d.setBlock(materialStack.getType().createBlockData());
-                        d.getTransformation().getScale().set(0.4f);
+                        Transformation t = d.getTransformation();
+                        t.getScale().set(0.4f);
+                        t.getLeftRotation().identity();
+                        d.setTransformation(t);
                     }) :
                     world.spawn(spawnLoc, ItemDisplay.class, d -> {
                         d.setItemStack(materialStack);

@@ -1,8 +1,11 @@
 package MCplugin.powerTrims.UltimateUpgrader;
 
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ArmorMeta;
@@ -42,6 +45,10 @@ public class Ritual {
         animation.start();
         location.getWorld().playSound(location, Sound.BLOCK_BEACON_ACTIVATE, 1.5f, 0.8f);
 
+        String dimensionName = getDimensionName(location.getWorld());
+        String coords = String.format("X: %d, Y: %d, Z: %d", location.getBlockX(), location.getBlockY(), location.getBlockZ());
+        Bukkit.broadcastMessage(ChatColor.DARK_PURPLE + "§l[!] " + ChatColor.LIGHT_PURPLE + player.getName() + " has begun a powerful ritual in " + dimensionName + " at " + coords + "!");
+
         new BukkitRunnable() {
             int countdown = config.getDuration();
 
@@ -59,6 +66,15 @@ public class Ritual {
                 countdown--;
             }
         }.runTaskTimer(plugin, 0L, 20L);
+    }
+
+    private String getDimensionName(World world) {
+        return switch (world.getEnvironment()) {
+            case NORMAL -> "the Overworld";
+            case NETHER -> "the Nether";
+            case THE_END -> "the End";
+            default -> "an unknown dimension";
+        };
     }
 
     private void complete() {
@@ -98,6 +114,7 @@ public class Ritual {
             ritualManager.incrementUpgradeCount(pattern);
         }
 
+        Bukkit.broadcastMessage(ChatColor.DARK_PURPLE + "§l[!] " + ChatColor.LIGHT_PURPLE + "The ritual has been completed!");
         ritualManager.endRitual(player.getUniqueId());
         player.sendMessage("§aThe ritual is complete! Your armor has been empowered.");
     }

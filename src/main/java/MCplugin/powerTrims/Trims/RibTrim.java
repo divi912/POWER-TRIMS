@@ -343,5 +343,15 @@ public class RibTrim implements Listener {
         }
     }
 
-
+    public void cleanup() {
+        for (List<Mob> minions : playerMinionMap.values()) {
+            for (Mob minion : minions) {
+                if (minion.isValid()) {
+                    minion.remove();
+                }
+            }
+        }
+        playerMinionMap.clear();
+        playerTargetMap.clear();
+    }
 }

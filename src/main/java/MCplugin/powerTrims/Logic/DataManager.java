@@ -95,16 +95,6 @@ public class DataManager {
             }
         }
 
-
-
-        try {
-            cooldownConfig.save(cooldownFile);
-        } catch (IOException e) {
-            plugin.getLogger().severe("Could not save data files!");
-            e.printStackTrace();
-        }
-
-
         try {
             cooldownConfig.save(cooldownFile);
         } catch (IOException e) {
@@ -119,7 +109,6 @@ public class DataManager {
     public void setCooldown(Player player, TrimPattern pattern, long cooldown) {
         String trimName = getTrimName(pattern);
         cooldownCache.computeIfAbsent(player.getUniqueId(), k -> new HashMap<>()).put(trimName, cooldown);
-        saveData();
     }
 
     public long getCooldown(Player player, TrimPattern pattern) {

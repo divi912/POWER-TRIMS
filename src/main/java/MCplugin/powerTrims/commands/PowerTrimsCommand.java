@@ -45,15 +45,6 @@ public class PowerTrimsCommand implements CommandExecutor {
             case "resetcooldowns":
                 handleResetCooldowns(sender);
                 break;
-            case "trust":
-                handleTrust(sender, args);
-                break;
-            case "untrust":
-                handleUntrust(sender, args);
-                break;
-            case "trustlist":
-                handleTrustList(sender);
-                break;
             default:
                 sendHelpMessage(sender);
                 break;
@@ -86,57 +77,13 @@ public class PowerTrimsCommand implements CommandExecutor {
         player.sendMessage(ChatColor.GREEN + "All your trim cooldowns have been reset.");
     }
 
-    private void handleTrust(CommandSender sender, String[] args) {
-        if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "This command can only be used by players.");
-            return;
-        }
-        if (args.length < 2) {
-            sender.sendMessage(ChatColor.RED + "Usage: /powertrims trust <player>");
-            return;
-        }
-        Player player = (Player) sender;
-        Player targetPlayer = Bukkit.getPlayer(args[1]);
-        if (targetPlayer == null) {
-            player.sendMessage(ChatColor.RED + "Player not found.");
-            return;
-        }
-        trustManager.trustPlayer(player.getUniqueId(), targetPlayer.getUniqueId(), sender);
-    }
-
-    private void handleUntrust(CommandSender sender, String[] args) {
-        if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "This command can only be used by players.");
-            return;
-        }
-        if (args.length < 2) {
-            sender.sendMessage(ChatColor.RED + "Usage: /powertrims untrust <player>");
-            return;
-        }
-        Player player = (Player) sender;
-        Player targetPlayer = Bukkit.getPlayer(args[1]);
-        if (targetPlayer == null) {
-            player.sendMessage(ChatColor.RED + "Player not found.");
-            return;
-        }
-        trustManager.untrustPlayer(player.getUniqueId(), targetPlayer.getUniqueId(), sender);
-    }
-
-    private void handleTrustList(CommandSender sender) {
-        if (!(sender instanceof Player)) {
-            sender.sendMessage(ChatColor.RED + "This command can only be used by players.");
-            return;
-        }
-        trustManager.showTrustList(((Player) sender).getUniqueId(), sender);
-    }
-
     private void sendHelpMessage(CommandSender sender) {
         sender.sendMessage(ChatColor.GOLD + "--- PowerTrims Help ---");
         sender.sendMessage(ChatColor.AQUA + "/powertrims panel" + ChatColor.GRAY + " - Opens the web configuration panel.");
         sender.sendMessage(ChatColor.AQUA + "/powertrims reload" + ChatColor.GRAY + " - Reloads the config.");
         sender.sendMessage(ChatColor.AQUA + "/powertrims resetcooldowns" + ChatColor.GRAY + " - Resets all your cooldowns.");
-        sender.sendMessage(ChatColor.AQUA + "/powertrims trust <player>" + ChatColor.GRAY + " - Trust a player.");
-        sender.sendMessage(ChatColor.AQUA + "/powertrims untrust <player>" + ChatColor.GRAY + " - Untrust a player.");
-        sender.sendMessage(ChatColor.AQUA + "/powertrims trustlist" + ChatColor.GRAY + " - View your trusted players.");
+        sender.sendMessage(ChatColor.AQUA + "/trust <player>" + ChatColor.GRAY + " - Trust a player.");
+        sender.sendMessage(ChatColor.AQUA + "/untrust <player>" + ChatColor.GRAY + " - Untrust a player.");
+        sender.sendMessage(ChatColor.AQUA + "/trustlist" + ChatColor.GRAY + " - View your trusted players.");
     }
 }

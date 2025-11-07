@@ -220,4 +220,15 @@ public class CoastTrim implements Listener {
             abilityManager.activatePrimaryAbility(event.getPlayer());
         }
     }
+
+    public void cleanup() {
+        for (List<BlockDisplay> chains : activeChains.values()) {
+            for (BlockDisplay chain : chains) {
+                if (chain.isValid()) {
+                    chain.remove();
+                }
+            }
+        }
+        activeChains.clear();
+    }
 }

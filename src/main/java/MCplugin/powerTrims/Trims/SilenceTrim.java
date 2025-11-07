@@ -98,7 +98,6 @@ public class SilenceTrim implements Listener {
         if (!targets.isEmpty()) {
             playSculkTentacleAnimation(player, targets);
         } else {
-            playGroundShockwave(player, PRIMARY_RADIUS);
             player.getWorld().playSound(player.getLocation(), Sound.ENTITY_WARDEN_ANGRY, 1.5f, 1.8f);
         }
     }
@@ -109,6 +108,8 @@ public class SilenceTrim implements Listener {
         final double SEGMENT_LENGTH = 0.25;
         final int DURATION_TICKS = 60;
         final List<List<BlockDisplay>> allTentacles = new ArrayList<>();
+        // OPTIMIZATION: Increase interpolation to 3 ticks to smooth out the 2-tick timer
+        final int INTERPOLATION_TICKS = 3;
 
         for (int i = 0; i < TENTACLE_COUNT; i++) {
             List<BlockDisplay> currentTentacle = new ArrayList<>();
@@ -116,7 +117,7 @@ public class SilenceTrim implements Listener {
                 int finalJ = j;
                 BlockDisplay segment = player.getWorld().spawn(player.getLocation(), BlockDisplay.class, bd -> {
                     bd.setBlock(Material.SCULK.createBlockData());
-                    bd.setInterpolationDuration(1);
+                    bd.setInterpolationDuration(INTERPOLATION_TICKS); // Use new value
                     bd.setInterpolationDelay(-1);
                     Transformation t = bd.getTransformation();
                     t.getScale().set(0.2f - (finalJ * 0.01f));
@@ -132,11 +133,13 @@ public class SilenceTrim implements Listener {
 
             @Override
             public void run() {
-                if (ticks++ > DURATION_TICKS || !player.isValid()) {
+                // OPTIMIZATION: Stop task if ticks * period > duration
+                if ((ticks * 2) > DURATION_TICKS || !player.isValid()) {
                     this.cancel();
                     allTentacles.forEach(tentacle -> tentacle.forEach(BlockDisplay::remove));
                     return;
                 }
+                ticks++;
 
                 Vector backDir = player.getLocation().getDirection().clone().multiply(-1);
                 Vector sideDir = backDir.clone().crossProduct(new Vector(0, 1, 0)).normalize();
@@ -153,9 +156,9 @@ public class SilenceTrim implements Listener {
                         if (!segment.isValid()) continue;
 
                         Vector dir = player.getLocation().getDirection().clone().multiply(-1);
-                        double wave = Math.sin(ticks * 0.3 + i * 1.5 + j * 0.5) * 0.6;
+                        double wave = Math.sin(ticks * 2 * 0.3 + i * 1.5 + j * 0.5) * 0.6; // Adjust wave speed for new timer
                         dir.add(sideDir.clone().multiply(wave * 0.5));
-                        dir.setY(dir.getY() + Math.cos(ticks * 0.2 + i) * 0.4 - (j * 0.05));
+                        dir.setY(dir.getY() + Math.cos(ticks * 2 * 0.2 + i) * 0.4 - (j * 0.05));
 
                         Vector newPos = previousSegmentPos.clone().add(dir.normalize().multiply(SEGMENT_LENGTH));
                         segment.teleport(newPos.toLocation(player.getWorld()));
@@ -163,7 +166,7 @@ public class SilenceTrim implements Listener {
                     }
                 }
             }
-        }.runTaskTimer(plugin, 0L, 1L);
+        }.runTaskTimer(plugin, 0L, 2L); // OPTIMIZATION: Changed from 1L to 2L
     }
 
 
@@ -172,15 +175,16 @@ public class SilenceTrim implements Listener {
         final int graspTicks = 20;
         final Map<LivingEntity, List<BlockDisplay>> tendrils = new HashMap<>();
         final Map<LivingEntity, BlockDisplay> chargeSpheres = new HashMap<>();
+        // OPTIMIZATION: Increase interpolation to 4 ticks to smooth out the 2-tick timer
+        final int INTERPOLATION_TICKS = 4;
 
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_WARDEN_TENDRIL_CLICKS, 2.0f, 1.2f);
-        playGroundShockwave(player, PRIMARY_RADIUS);
 
         for (LivingEntity target : targets) {
             BlockDisplay charge = player.getWorld().spawn(player.getEyeLocation(), BlockDisplay.class, bd -> {
                 bd.setBlock(Material.SCULK_SHRIEKER.createBlockData());
                 bd.setBrightness(new Display.Brightness(15, 15));
-                bd.setInterpolationDuration(3);
+                bd.setInterpolationDuration(INTERPOLATION_TICKS); // Use new value
                 bd.setInterpolationDelay(-1);
                 Transformation t = bd.getTransformation();
                 t.getScale().set(0.4f);
@@ -194,7 +198,7 @@ public class SilenceTrim implements Listener {
             for (int i = 0; i < tendrilLinks; i++) {
                 BlockDisplay link = player.getWorld().spawn(player.getEyeLocation(), BlockDisplay.class, bd -> {
                     bd.setBlock(Material.SCULK.createBlockData());
-                    bd.setInterpolationDuration(3);
+                    bd.setInterpolationDuration(INTERPOLATION_TICKS); // Use new value
                     bd.setInterpolationDelay(-1);
                     Transformation t = bd.getTransformation();
                     t.getScale().set(0.25f);
@@ -206,14 +210,16 @@ public class SilenceTrim implements Listener {
         }
 
         new BukkitRunnable() {
-            private int ticks = 0;
+            private int ticks = 0; // This will now increment every 2 server ticks
 
             @Override
             public void run() {
-                if (ticks++ >= (extendTicks + graspTicks) || !player.isValid()) {
+                // OPTIMIZATION: Stop task if ticks * period > duration
+                if ((ticks * 2) >= (extendTicks + graspTicks) || !player.isValid()) {
                     this.cancel();
                     return;
                 }
+                ticks++;
 
                 Location playerAnchor = player.getEyeLocation().add(0, -0.5, 0);
 
@@ -221,7 +227,8 @@ public class SilenceTrim implements Listener {
                     LivingEntity target = entry.getKey();
                     if (!target.isValid()) continue;
 
-                    double extendProgress = Math.min(1.0, (double) ticks / extendTicks);
+                    // Adjust progress calculation for the 2-tick timer
+                    double extendProgress = Math.min(1.0, (double) (ticks * 2) / extendTicks);
                     Location targetAnchor = target.getLocation().add(0, target.getHeight() / 2, 0);
                     Vector toTarget = targetAnchor.toVector().subtract(playerAnchor.toVector());
 
@@ -232,13 +239,13 @@ public class SilenceTrim implements Listener {
 
                         double progress = (double) i / (links.size() - 1);
                         Location linkPos = playerAnchor.clone().add(toTarget.clone().multiply(progress * extendProgress));
-                        linkPos.add(0, Math.sin(ticks * 0.5 + i * 0.5) * 0.2, 0);
+                        linkPos.add(0, Math.sin(ticks * 2 * 0.5 + i * 0.5) * 0.2, 0); // Adjust wave speed
                         link.teleport(linkPos);
                     }
 
                     BlockDisplay charge = chargeSpheres.get(target);
                     if (charge != null && charge.isValid()) {
-                        double chargeProgress = (double) ticks / (extendTicks + graspTicks);
+                        double chargeProgress = (double) (ticks * 2) / (extendTicks + graspTicks); // Adjust progress
                         Location chargePos = playerAnchor.clone().add(toTarget.clone().multiply(chargeProgress));
                         charge.teleport(chargePos);
                     }
@@ -261,42 +268,17 @@ public class SilenceTrim implements Listener {
                 tendrils.values().forEach(list -> list.forEach(BlockDisplay::remove));
                 chargeSpheres.values().forEach(BlockDisplay::remove);
             }
-        }.runTaskTimer(plugin, 0L, 1L);
+        }.runTaskTimer(plugin, 0L, 2L); // OPTIMIZATION: Changed from 1L to 2L
     }
 
-    private void playGroundShockwave(Player player, double maxRadius) {
-        Location center = player.getLocation();
-        int particleCount = 50;
-        int animationTicks = 25;
 
-        for (int i = 0; i < particleCount; i++) {
-            ThreadLocalRandom r = ThreadLocalRandom.current();
-            BlockDisplay shard = player.getWorld().spawn(center, BlockDisplay.class, bd -> {
-                bd.setBlock(Material.SCULK.createBlockData());
-                bd.setInterpolationDuration(animationTicks);
-                bd.setInterpolationDelay(-1);
-                Transformation t = bd.getTransformation();
-                t.getScale().set(r.nextFloat() * 0.5f + 0.3f);
-                bd.setTransformation(t);
-            });
-
-            double angle = r.nextDouble(Math.PI * 2);
-            double distance = r.nextDouble(maxRadius * 0.8, maxRadius);
-            Location finalPos = center.clone().add(Math.cos(angle) * distance, 0.1, Math.sin(angle) * distance);
-
-            shard.teleport(finalPos);
-            Transformation finalTransform = shard.getTransformation();
-            finalTransform.getScale().set(0f);
-            shard.setTransformation(finalTransform);
-
-            new BukkitRunnable() { @Override public void run() { shard.remove(); }}.runTaskLater(plugin, animationTicks + 1);
-        }
-    }
 
     private void playSculkExplosion(Location location) {
         location.getWorld().playSound(location, Sound.ENTITY_WARDEN_SONIC_BOOM, 1.5f, 1.2f);
         int particleCount = 40;
         int animationTicks = 20;
+        // OPTIMIZATION: Collect shards to remove them with one task
+        final List<BlockDisplay> shards = new ArrayList<>(particleCount);
 
         for (int i = 0; i < particleCount; i++) {
             ThreadLocalRandom r = ThreadLocalRandom.current();
@@ -309,6 +291,7 @@ public class SilenceTrim implements Listener {
                 t.getLeftRotation().set(new AxisAngle4f(r.nextFloat() * 360, r.nextFloat(), r.nextFloat(), r.nextFloat()));
                 bd.setTransformation(t);
             });
+            shards.add(shard); // Add to list
 
             Vector randomVec = new Vector(r.nextDouble() - 0.5, r.nextDouble() - 0.5, r.nextDouble() - 0.5);
             Location finalPos = location.clone().add(randomVec.normalize().multiply(3.0));
@@ -318,8 +301,20 @@ public class SilenceTrim implements Listener {
             finalTransform.getScale().set(0f);
             shard.setTransformation(finalTransform);
 
-            new BukkitRunnable() { @Override public void run() { shard.remove(); }}.runTaskLater(plugin, animationTicks + 1);
+            // OPTIMIZATION: Removed individual runnable creation
         }
+
+        // OPTIMIZATION: Create one runnable to remove all shards
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                for (BlockDisplay shard : shards) {
+                    if (shard.isValid()) {
+                        shard.remove();
+                    }
+                }
+            }
+        }.runTaskLater(plugin, animationTicks + 5); // Add 5 ticks buffer
     }
 
 
@@ -327,6 +322,8 @@ public class SilenceTrim implements Listener {
         Location center = player.getLocation();
         int particleCount = 70;
         int animationTicks = 30;
+        // OPTIMIZATION: Collect shards to remove them with one task
+        final List<BlockDisplay> shards = new ArrayList<>(particleCount);
 
         for (int i = 0; i < particleCount; i++) {
             ThreadLocalRandom r = ThreadLocalRandom.current();
@@ -339,6 +336,7 @@ public class SilenceTrim implements Listener {
                 t.getLeftRotation().set(new AxisAngle4f(r.nextFloat() * 360, r.nextFloat(), r.nextFloat(), r.nextFloat()));
                 bd.setTransformation(t);
             });
+            shards.add(shard); // Add to list
 
             Location finalPos = center.clone().add(Vector.getRandom().subtract(new Vector(0.5, 0.5, 0.5)).normalize().multiply(ECHO_RADIUS));
             shard.teleport(finalPos);
@@ -347,8 +345,20 @@ public class SilenceTrim implements Listener {
             finalTransform.getScale().set(0f);
             shard.setTransformation(finalTransform);
 
-            new BukkitRunnable() { @Override public void run() { shard.remove(); }}.runTaskLater(plugin, animationTicks + 1);
+            // OPTIMIZATION: Removed individual runnable creation
         }
+
+        // OPTIMIZATION: Create one runnable to remove all shards
+        new BukkitRunnable() {
+            @Override
+            public void run() {
+                for (BlockDisplay shard : shards) {
+                    if (shard.isValid()) {
+                        shard.remove();
+                    }
+                }
+            }
+        }.runTaskLater(plugin, animationTicks + 5); // Add 5 ticks buffer
 
         Location heartPos = player.getEyeLocation().add(0, 1.5, 0);
         BlockDisplay shrieker = player.getWorld().spawn(heartPos, BlockDisplay.class, bd -> {

@@ -241,4 +241,23 @@ public class EyeTrim implements Listener {
             }
         }
     }
+
+    public void cleanup() {
+        for (BukkitRunnable task : activeTrueSightTasks.values()) {
+            task.cancel();
+        }
+        activeTrueSightTasks.clear();
+
+        for (BukkitRunnable task : activeAnimationTasks.values()) {
+            task.cancel();
+        }
+        activeAnimationTasks.clear();
+
+        for (List<Entity> entities : activeEyeEffects.values()) {
+            for (Entity entity : entities) {
+                entity.remove();
+            }
+        }
+        activeEyeEffects.clear();
+    }
 }
