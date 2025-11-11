@@ -31,7 +31,6 @@ import MCplugin.powerTrims.config.ConfigManager;
 import MCplugin.powerTrims.integrations.PlaceholderIntegration;
 import MCplugin.powerTrims.integrations.WorldGuardIntegration;
 import MCplugin.powerTrims.integrations.geyser.DoubleSneakManager;
-import MCplugin.powerTrims.ultimates.silenceult.SilenceTransformAnimations;
 import MCplugin.powerTrims.ultimates.silenceult.SilenceUlt;
 import MCplugin.powerTrims.ultimates.silenceult.SilenceUltData;
 import com.jeff_media.armorequipevent.ArmorEquipEvent;
@@ -72,6 +71,7 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
     private CoastTrim coastTrim;
     private DuneTrim duneTrim;
     private FlowTrim flowTrim;
+    private SilenceTrim silenceTrim;
 
     @Override
     public void onLoad() {
@@ -119,7 +119,7 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         // Cleanup any players that were in a warden state when the server stopped
         if (silenceUlt != null) {
             silenceUltData.loadOriginalBlocks();
-            SilenceTransformAnimations.revertSculkBlocks();
+            silenceUlt.revertAllSculkBlocks();
             for (Player player : Bukkit.getOnlinePlayers()) {
                 if (DisguiseAPI.isDisguised(player)) {
                     silenceUlt.revertFromWarden(player, false);
@@ -150,9 +150,8 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
 
     private void registerTrimAbilities() {
-        // Create and register the single instance of SilenceUlt
         if (Bukkit.getPluginManager().getPlugin("LibsDisguises") != null) {
-            this.silenceUltData = new SilenceUltData(this);
+            this.silenceUltData = new SilenceUltData(this, configManager);
             this.silenceUlt = new SilenceUlt(this, upgradeKey, silenceUltData);
             getServer().getPluginManager().registerEvents(this.silenceUlt, this);
         } else {
@@ -160,7 +159,8 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         }
 
         // Register other trims
-        getServer().getPluginManager().registerEvents(new SilenceTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
+        this.silenceTrim = new SilenceTrim(this, cooldownManager, trustManager, configManager, abilityManager);
+        getServer().getPluginManager().registerEvents(silenceTrim, this);
         getServer().getPluginManager().registerEvents(new WildTrim(this, cooldownManager, trustManager, configManager, abilityManager), this);
         this.vexTrim = new VexTrim(this, cooldownManager, trustManager, configManager, abilityManager);
         getServer().getPluginManager().registerEvents(vexTrim, this);
@@ -217,6 +217,32 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
         config.addDefault("silence.passive.effect_duration_ticks", 300);
         config.addDefault("silence.primary.max_affected_entities", 30);
         config.addDefault("silence.primary.cooldown", 90000L);
+
+        // Silence Ultimate
+        config.addDefault("silence.ult.rage_per_hit_taken", 1.0);
+        config.addDefault("silence.ult.rage_per_hit_dealt", 0.5);
+        config.addDefault("silence.ult.max_rage", 150.0);
+        config.addDefault("silence.ult.warden_duration_seconds", 40L);
+        config.addDefault("silence.ult.warden_strength_level", 2);
+        config.addDefault("silence.ult.warden_health_boost_level", 4);
+        config.addDefault("silence.ult.warden_resistance_level", 1);
+        config.addDefault("silence.ult.boom_cooldown_seconds", 10L);
+        config.addDefault("silence.ult.boom_damage", 12);
+        config.addDefault("silence.ult.boom_length", 20.0);
+        config.addDefault("silence.ult.boom_aoe_radius", 3.0);
+        config.addDefault("silence.ult.grasp_cooldown_seconds", 15L);
+        config.addDefault("silence.ult.grasp_radius", 25.0);
+        config.addDefault("silence.ult.grasp_strength", 2.0);
+        config.addDefault("silence.ult.leap_cooldown_seconds", 25L);
+        config.addDefault("silence.ult.leap_power", 1.8);
+        config.addDefault("silence.ult.leap_slam_radius", 12.0);
+        config.addDefault("silence.ult.leap_slam_explosion_power", 10.0f);
+        config.addDefault("silence.ult.leap_slam_breaks_blocks", true);
+        config.addDefault("silence.ult.leap_slam_sets_fire", true);
+        config.addDefault("silence.ult.transform_animation_seconds", 6);
+        config.addDefault("silence.ult.sculk_spread_radius", 10);
+        config.addDefault("silence.ult.lightning_random_offset", 8.0);
+        config.addDefault("silence.ult.enable_weather_effect", true);
 
         // Wild Trim
         config.addDefault("wild.passive.trigger_health", 8);
@@ -382,6 +408,10 @@ public final class PowerTrimss extends JavaPlugin implements Listener {
 
         if (flowTrim != null) {
             flowTrim.cleanup();
+        }
+
+        if (silenceTrim != null) {
+            silenceTrim.cleanup();
         }
 
         getLogger().info(ChatColor.RED + "--------------------------------------");

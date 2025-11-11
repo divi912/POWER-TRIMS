@@ -38,7 +38,7 @@ public class SentryTrim implements Listener {
     public SentryTrim(JavaPlugin plugin, TrimCooldownManager cooldownManager, PersistentTrustManager trustManager, ConfigManager configManager, AbilityManager abilityManager) {
         this.plugin = plugin;
         this.cooldownManager = cooldownManager;
-        this.trustManager = trustManager; // Initialize the Trust Manager
+        this.trustManager = trustManager;
         this.configManager = configManager;
         this.abilityManager = abilityManager;
         this.effectKey = new NamespacedKey(plugin, "sentry_trim_effect");
@@ -67,9 +67,9 @@ public class SentryTrim implements Listener {
 
         Location eyeLoc = player.getEyeLocation();
         World world = player.getWorld();
-        Player sentryUser = player; // Store the player using the ability
+        Player sentryUser = player;
 
-        // Find the nearest LivingEntity (excluding the shooter and trusted players) within 15 blocks
+
         double radius = 15;
         LivingEntity nearestTarget = null;
         double nearestDistance = Double.MAX_VALUE;
@@ -144,12 +144,8 @@ public class SentryTrim implements Listener {
             return;
         }
 
-        // Cancel vanilla damage
-        event.setCancelled(true);
-
-        // Apply true damage (bypasses armor, enchantments, and resistance)
-        double newHealth = Math.max(0, target.getHealth() - TRUE_DAMAGE);
-        target.setHealth(newHealth);
+        // Apply damage through Bukkit's damage system
+        target.damage(TRUE_DAMAGE, shooter);
         target.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 200, 1, false, true, true));
         target.addPotionEffect(new PotionEffect(PotionEffectType.HUNGER, 600, 1, false, true, true));
 

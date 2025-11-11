@@ -17,6 +17,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitRunnable;
+import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Transformation;
 import org.bukkit.util.Vector;
 import org.joml.AxisAngle4f;
@@ -32,6 +33,7 @@ public class SilenceTrim implements Listener {
     private final AbilityManager abilityManager;
 
     private final Map<UUID, Long> wardensEchoCooldowns = new HashMap<>();
+    private final List<BukkitTask> activeAnimations = new ArrayList<>();
 
     private final long WARDENS_ECHO_COOLDOWN_MS;
     private final double PRIMARY_RADIUS;
@@ -128,7 +130,7 @@ public class SilenceTrim implements Listener {
             allTentacles.add(currentTentacle);
         }
 
-        new BukkitRunnable() {
+        BukkitTask task = new BukkitRunnable() {
             private int ticks = 0;
 
             @Override
@@ -137,6 +139,7 @@ public class SilenceTrim implements Listener {
                 if ((ticks * 2) > DURATION_TICKS || !player.isValid()) {
                     this.cancel();
                     allTentacles.forEach(tentacle -> tentacle.forEach(BlockDisplay::remove));
+                    activeAnimations.remove(this);
                     return;
                 }
                 ticks++;
@@ -167,6 +170,7 @@ public class SilenceTrim implements Listener {
                 }
             }
         }.runTaskTimer(plugin, 0L, 2L); // OPTIMIZATION: Changed from 1L to 2L
+        activeAnimations.add(task);
     }
 
 
@@ -209,7 +213,7 @@ public class SilenceTrim implements Listener {
             tendrils.put(target, links);
         }
 
-        new BukkitRunnable() {
+        BukkitTask task = new BukkitRunnable() {
             private int ticks = 0; // This will now increment every 2 server ticks
 
             @Override
@@ -267,8 +271,10 @@ public class SilenceTrim implements Listener {
                 }
                 tendrils.values().forEach(list -> list.forEach(BlockDisplay::remove));
                 chargeSpheres.values().forEach(BlockDisplay::remove);
+                activeAnimations.remove(this);
             }
         }.runTaskTimer(plugin, 0L, 2L); // OPTIMIZATION: Changed from 1L to 2L
+        activeAnimations.add(task);
     }
 
 
@@ -305,7 +311,7 @@ public class SilenceTrim implements Listener {
         }
 
         // OPTIMIZATION: Create one runnable to remove all shards
-        new BukkitRunnable() {
+        BukkitTask task = new BukkitRunnable() {
             @Override
             public void run() {
                 for (BlockDisplay shard : shards) {
@@ -313,8 +319,10 @@ public class SilenceTrim implements Listener {
                         shard.remove();
                     }
                 }
+                activeAnimations.remove(this);
             }
         }.runTaskLater(plugin, animationTicks + 5); // Add 5 ticks buffer
+        activeAnimations.add(task);
     }
 
 
@@ -349,7 +357,7 @@ public class SilenceTrim implements Listener {
         }
 
         // OPTIMIZATION: Create one runnable to remove all shards
-        new BukkitRunnable() {
+        BukkitTask task = new BukkitRunnable() {
             @Override
             public void run() {
                 for (BlockDisplay shard : shards) {
@@ -357,8 +365,10 @@ public class SilenceTrim implements Listener {
                         shard.remove();
                     }
                 }
+                activeAnimations.remove(this);
             }
         }.runTaskLater(plugin, animationTicks + 5); // Add 5 ticks buffer
+        activeAnimations.add(task);
 
         Location heartPos = player.getEyeLocation().add(0, 1.5, 0);
         BlockDisplay shrieker = player.getWorld().spawn(heartPos, BlockDisplay.class, bd -> {
@@ -370,16 +380,18 @@ public class SilenceTrim implements Listener {
             bd.setTransformation(t);
         });
 
-        new BukkitRunnable() {
+        BukkitTask shriekerTask1 = new BukkitRunnable() {
             @Override
             public void run() {
                 Transformation t = shrieker.getTransformation();
                 t.getScale().set(0.8f);
                 shrieker.setTransformation(t);
+                activeAnimations.remove(this);
             }
         }.runTaskLater(plugin, 1L);
+        activeAnimations.add(shriekerTask1);
 
-        new BukkitRunnable() {
+        BukkitTask shriekerTask2 = new BukkitRunnable() {
             @Override
             public void run() {
                 if (!shrieker.isValid()) return;
@@ -387,8 +399,10 @@ public class SilenceTrim implements Listener {
                 t.getScale().set(0f);
                 shrieker.setTransformation(t);
                 new BukkitRunnable() { @Override public void run() { shrieker.remove(); }}.runTaskLater(plugin, 11L);
+                activeAnimations.remove(this);
             }
         }.runTaskLater(plugin, ECHO_EFFECT_DURATION_TICKS);
+        activeAnimations.add(shriekerTask2);
     }
 
     @EventHandler
@@ -403,6 +417,7 @@ public class SilenceTrim implements Listener {
         if (wardensEchoCooldowns.getOrDefault(player.getUniqueId(), 0L) > System.currentTimeMillis()) return;
 
         activateWardensEcho(player);
+        wardensEchoCooldowns.put(player.getUniqueId(), System.currentTimeMillis() + WARDENS_ECHO_COOLDOWN_MS);
     }
 
     private void activateWardensEcho(Player player) {
@@ -422,8 +437,6 @@ public class SilenceTrim implements Listener {
         player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, ECHO_EFFECT_DURATION_TICKS, 1));
         player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, ECHO_EFFECT_DURATION_TICKS, 1));
         Messaging.sendTrimMessage(player, "Silence", ChatColor.RED, "Your armor has unleashed " + ChatColor.BOLD + "Warden's Echo!");
-
-        wardensEchoCooldowns.put(player.getUniqueId(), System.currentTimeMillis() + WARDENS_ECHO_COOLDOWN_MS);
     }
 
     private void applyPrimaryEffects(LivingEntity target) {
@@ -449,5 +462,12 @@ public class SilenceTrim implements Listener {
     private void sendMessages(Player targetPlayer) {
         Messaging.sendTrimMessage(targetPlayer, "Silence", ChatColor.RED, "You have been hit with the " + ChatColor.BOLD + "Warden's Roar!");
         Messaging.sendTrimMessage(targetPlayer, "Silence", ChatColor.RED, "Your Ender Pearl is on cooldown!");
+    }
+
+    public void cleanup() {
+        for (BukkitTask task : activeAnimations) {
+            task.cancel();
+        }
+        activeAnimations.clear();
     }
 }

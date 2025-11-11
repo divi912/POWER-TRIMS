@@ -62,4 +62,8 @@ public class ConfigManager {
     public long getLong(String path) {
         return config.getLong(path);
     }
+
+    public boolean getBoolean(String path) {
+        return config.getBoolean(path);
+    }
 }

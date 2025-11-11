@@ -27,8 +27,6 @@ trims:
   flow: true
   bolt: true
 
-cooldown-display: ACTION_BAR  # Options: SCOREBOARD, ACTION_BAR. Default is Scoreboard
-
   # POWER-TRIMS Configuration
 sentry:
   primary:
@@ -47,6 +45,31 @@ silence:
     cooldown: 120000
     echo_radius: 6.0
     effect_duration_ticks: 300
+  ult:
+    rage_per_hit_taken: 1.0
+    rage_per_hit_dealt: 0.5
+    max_rage: 150.0
+    warden_duration_seconds: 40
+    warden_strength_level: 2
+    warden_health_boost_level: 4
+    warden_resistance_level: 1
+    boom_cooldown_seconds: 10
+    boom_damage: 12
+    boom_length: 20.0
+    boom_aoe_radius: 3.0
+    grasp_cooldown_seconds: 15
+    grasp_radius: 25.0
+    grasp_strength: 2.0
+    leap_cooldown_seconds: 25
+    leap_power: 1.8
+    leap_slam_radius: 12.0
+    leap_slam_explosion_power: 10.0
+    leap_slam_breaks_blocks: true
+    leap_slam_sets_fire: true
+    transform_animation_seconds: 6
+    sculk_spread_radius: 10
+    lightning_random_offset: 8.0
+    enable_weather_effect: true
 vex:
   primary:
     cooldown: 120000

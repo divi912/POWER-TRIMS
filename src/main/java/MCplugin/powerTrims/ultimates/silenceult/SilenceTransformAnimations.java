@@ -23,13 +23,13 @@ public class SilenceTransformAnimations {
 
     private final JavaPlugin plugin;
     private final SilenceUlt silenceUlt;
-    private static SilenceUltData data;
+    private final SilenceUltData data;
     private final Random random = new Random();
 
     public SilenceTransformAnimations(JavaPlugin plugin, SilenceUlt silenceUlt, SilenceUltData data) {
         this.plugin = plugin;
         this.silenceUlt = silenceUlt;
-        SilenceTransformAnimations.data = data;
+        this.data = data;
     }
 
     public void startTransformationSequence(Player player) {
@@ -38,10 +38,10 @@ public class SilenceTransformAnimations {
         data.originalBlocks.put(playerUUID, new HashMap<>());
         data.rage.put(playerUUID, 0.0);
 
-        player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, (SilenceUltData.TRANSFORM_ANIMATION_SECONDS + 5) * 20, 0, false, false));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.LEVITATION, (data.TRANSFORM_ANIMATION_SECONDS + 5) * 20, 0, false, false));
 
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_WARDEN_EMERGE, 2.0f, 0.5f);
-        if (SilenceUltData.ENABLE_WEATHER_EFFECT) {
+        if (data.ENABLE_WEATHER_EFFECT) {
             player.setPlayerWeather(WeatherType.DOWNFALL);
         }
 
@@ -69,8 +69,8 @@ public class SilenceTransformAnimations {
                 // Removed global world time modification
 
                 if (ticks % 10 == 0) { // Reduced frequency of lightning effects
-                    double offsetX = (random.nextDouble() - 0.5) * SilenceUltData.LIGHTNING_RANDOM_OFFSET * 4;
-                    double offsetZ = (random.nextDouble() - 0.5) * SilenceUltData.LIGHTNING_RANDOM_OFFSET * 4;
+                    double offsetX = (random.nextDouble() - 0.5) * data.LIGHTNING_RANDOM_OFFSET * 4;
+                    double offsetZ = (random.nextDouble() - 0.5) * data.LIGHTNING_RANDOM_OFFSET * 4;
                     world.strikeLightningEffect(player.getLocation().clone().add(offsetX, 0, offsetZ));
                 }
 
@@ -86,7 +86,7 @@ public class SilenceTransformAnimations {
 
     public void startMainAnimation(Player player) {
         UUID playerUUID = player.getUniqueId();
-        final int totalDurationTicks = SilenceUltData.TRANSFORM_ANIMATION_SECONDS * 20;
+        final int totalDurationTicks = data.TRANSFORM_ANIMATION_SECONDS * 20;
         final List<BlockDisplay> absorbingBlocks = new ArrayList<>();
         final List<BlockDisplay> shellBlocks = new ArrayList<>();
         final List<Vector> shellOffsets = createPlayerShellOffsets();
@@ -254,7 +254,7 @@ public class SilenceTransformAnimations {
 
             @Override
             public void run() {
-                if (!data.transformingPlayers.contains(playerUUID) || !player.isOnline() || radius > SilenceUltData.SCULK_SPREAD_RADIUS) {
+                if (!data.transformingPlayers.contains(playerUUID) || !player.isOnline() || radius > data.SCULK_SPREAD_RADIUS) {
                     this.cancel();
                     return;
                 }
@@ -264,7 +264,7 @@ public class SilenceTransformAnimations {
                         if (Math.abs(x) < radius && Math.abs(z) < radius) continue;
                         Location blockLoc = center.clone().add(x, -1, z);
                         blockLoc = blockLoc.getWorld().getHighestBlockAt(blockLoc).getLocation();
-                        if (blockLoc.distanceSquared(center) > SilenceUltData.SCULK_SPREAD_RADIUS * SilenceUltData.SCULK_SPREAD_RADIUS) continue;
+                        if (blockLoc.distanceSquared(center) > data.SCULK_SPREAD_RADIUS * data.SCULK_SPREAD_RADIUS) continue;
 
                         Material type = blockLoc.getBlock().getType();
                         if (!type.isAir() && type.isSolid() && type != Material.SCULK) {
@@ -311,7 +311,7 @@ public class SilenceTransformAnimations {
         }.runTaskTimer(plugin, 0L, 1L);
     }
 
-    public static void revertSculkBlocks() {
+    public void revertSculkBlocks() {
         for (Map<Location, BlockData> playerOriginals : data.originalBlocks.values()) {
             if (playerOriginals == null || playerOriginals.isEmpty()) continue;
             for (Map.Entry<Location, BlockData> entry : playerOriginals.entrySet()) {

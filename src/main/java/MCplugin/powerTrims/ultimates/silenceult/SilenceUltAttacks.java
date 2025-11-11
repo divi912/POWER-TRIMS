@@ -39,7 +39,7 @@ public class SilenceUltAttacks {
 
         final long currentTime = System.currentTimeMillis();
         final Long lastUsed = data.wardenBoomCooldowns.get(playerUUID);
-        final long cooldownMillis = TimeUnit.SECONDS.toMillis(SilenceUltData.BOOM_COOLDOWN_SECONDS);
+        final long cooldownMillis = TimeUnit.SECONDS.toMillis(data.BOOM_COOLDOWN_SECONDS);
 
         if (lastUsed == null || (currentTime - lastUsed >= cooldownMillis)) {
             chargeWardenBoom(player);
@@ -132,14 +132,14 @@ public class SilenceUltAttacks {
         world.playSound(startLoc, Sound.ENTITY_WARDEN_SONIC_BOOM, 2, 1);
 
         final Set<LivingEntity> entitiesToDamage = new HashSet<>();
-        for (double i = 1; i < SilenceUltData.BOOM_LENGTH; i += 1) {
+        for (double i = 1; i < data.BOOM_LENGTH; i += 1) {
             Location point = startLoc.clone().add(direction.clone().multiply(i));
-            entitiesToDamage.addAll(world.getNearbyLivingEntities(point, SilenceUltData.BOOM_AOE_RADIUS));
+            entitiesToDamage.addAll(world.getNearbyLivingEntities(point, data.BOOM_AOE_RADIUS));
         }
         entitiesToDamage.remove(player);
 
         for (LivingEntity victim : entitiesToDamage) {
-            double newHealth = Math.max(0, victim.getHealth() - SilenceUltData.BOOM_DAMAGE);
+            double newHealth = Math.max(0, victim.getHealth() - data.BOOM_DAMAGE);
             victim.setHealth(newHealth);
             victim.damage(0, player);
         }
@@ -148,7 +148,7 @@ public class SilenceUltAttacks {
             double distance = 0;
             @Override
             public void run() {
-                if (distance > SilenceUltData.BOOM_LENGTH) {
+                if (distance > data.BOOM_LENGTH) {
                     this.cancel();
                     return;
                 }
@@ -168,7 +168,7 @@ public class SilenceUltAttacks {
 
         final long currentTime = System.currentTimeMillis();
         final Long lastUsed = data.deepDarkGraspCooldowns.get(playerUUID);
-        final long cooldownMillis = TimeUnit.SECONDS.toMillis(SilenceUltData.GRASP_COOLDOWN_SECONDS);
+        final long cooldownMillis = TimeUnit.SECONDS.toMillis(data.GRASP_COOLDOWN_SECONDS);
 
         if (lastUsed == null || (currentTime - lastUsed >= cooldownMillis)) {
             deepDarkGrasp(player);
@@ -186,7 +186,7 @@ public class SilenceUltAttacks {
         world.playSound(center, Sound.BLOCK_SCULK_SHRIEKER_SHRIEK, 2.0f, 2.0f);
         world.spawnParticle(Particle.SCULK_CHARGE_POP, center.clone().add(0, 1, 0), 30, 0.5, 0.5, 0.5, 0);
 
-        for (Entity entity : world.getNearbyEntities(center, SilenceUltData.GRASP_RADIUS, SilenceUltData.GRASP_RADIUS, SilenceUltData.GRASP_RADIUS)) {
+        for (Entity entity : world.getNearbyEntities(center, data.GRASP_RADIUS, data.GRASP_RADIUS, data.GRASP_RADIUS)) {
             if (entity instanceof LivingEntity && !entity.equals(player)) {
                 playGraspingTentacle(player, (LivingEntity) entity);
             }
@@ -239,7 +239,7 @@ public class SilenceUltAttacks {
                     }
                 } else {
                     Vector pullDirection = playerAnchor.toVector().subtract(targetAnchor.toVector()).normalize();
-                    target.setVelocity(pullDirection.multiply(SilenceUltData.GRASP_STRENGTH));
+                    target.setVelocity(pullDirection.multiply(data.GRASP_STRENGTH));
 
                     Vector toTarget = targetAnchor.toVector().subtract(playerAnchor.toVector());
                     for (int i = 0; i < tendrilLinks.size(); i++) {
@@ -264,7 +264,7 @@ public class SilenceUltAttacks {
         }
         final long currentTime = System.currentTimeMillis();
         final Long lastUsed = data.obliteratingLeapCooldowns.get(playerUUID);
-        final long cooldownMillis = TimeUnit.SECONDS.toMillis(SilenceUltData.LEAP_COOLDOWN_SECONDS);
+        final long cooldownMillis = TimeUnit.SECONDS.toMillis(data.LEAP_COOLDOWN_SECONDS);
 
         if (lastUsed == null || (currentTime - lastUsed >= cooldownMillis)) {
             obliteratingLeap(player);
@@ -278,7 +278,7 @@ public class SilenceUltAttacks {
     private void obliteratingLeap(Player player) {
         data.leapingPlayers.add(player.getUniqueId());
         player.getWorld().playSound(player.getLocation(), Sound.ENTITY_WARDEN_AGITATED, 2.0f, 0.5f);
-        player.setVelocity(new Vector(0, SilenceUltData.LEAP_POWER, 0));
+        player.setVelocity(new Vector(0, data.LEAP_POWER, 0));
 
         new BukkitRunnable() {
             boolean isFalling = false;
@@ -314,13 +314,13 @@ public class SilenceUltAttacks {
                     Location groundLoc = player.getLocation();
                     World world = groundLoc.getWorld();
 
-                    world.createExplosion(player, groundLoc, SilenceUltData.LEAP_SLAM_EXPLOSION_POWER, SilenceUltData.LEAP_SLAM_SETS_FIRE, SilenceUltData.LEAP_SLAM_BREAKS_BLOCKS);
+                    world.createExplosion(player, groundLoc, data.LEAP_SLAM_EXPLOSION_POWER, data.LEAP_SLAM_SETS_FIRE, data.LEAP_SLAM_BREAKS_BLOCKS);
 
                     new BukkitRunnable() {
                         double radius = 0;
                         @Override
                         public void run() {
-                            if (radius >= SilenceUltData.LEAP_SLAM_RADIUS) {
+                            if (radius >= data.LEAP_SLAM_RADIUS) {
                                 this.cancel();
                                 return;
                             }
@@ -335,7 +335,7 @@ public class SilenceUltAttacks {
                         }
                     }.runTaskTimer(plugin, 0L, 1L);
 
-                    for (Entity entity : world.getNearbyEntities(groundLoc, SilenceUltData.LEAP_SLAM_RADIUS, SilenceUltData.LEAP_SLAM_RADIUS, SilenceUltData.LEAP_SLAM_RADIUS)) {
+                    for (Entity entity : world.getNearbyEntities(groundLoc, data.LEAP_SLAM_RADIUS, data.LEAP_SLAM_RADIUS, data.LEAP_SLAM_RADIUS)) {
                         if (entity instanceof LivingEntity && !entity.equals(player)) {
                             Vector knockback = entity.getLocation().toVector().subtract(groundLoc.toVector()).normalize();
                             entity.setVelocity(knockback.multiply(2.0).setY(0.5));

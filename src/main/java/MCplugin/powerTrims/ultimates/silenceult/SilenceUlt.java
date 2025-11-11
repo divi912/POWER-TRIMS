@@ -47,12 +47,7 @@ public class SilenceUlt implements Listener {
     @EventHandler
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
-        UUID playerUUID = player.getUniqueId();
-        cleanupPlayer(playerUUID);
-        data.rage.remove(playerUUID);
-        data.wardenBoomCooldowns.remove(playerUUID);
-        data.deepDarkGraspCooldowns.remove(playerUUID);
-        data.obliteratingLeapCooldowns.remove(playerUUID);
+        cleanupPlayer(player.getUniqueId());
     }
 
     @EventHandler
@@ -65,20 +60,15 @@ public class SilenceUlt implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onDamage(EntityDamageByEntityEvent event) {
-        boolean rageGainApplied = false;
-
+        // Player being damaged
         if (event.getEntity() instanceof Player player) {
             if (ArmourChecking.hasFullUpgradedArmor(player, TrimPattern.SILENCE, upgradeKey)) {
-                addRage(player, SilenceUltData.RAGE_PER_HIT_TAKEN);
-                rageGainApplied = true;
+                addRage(player, data.RAGE_PER_HIT_TAKEN);
             }
         }
-
+        // Player dealing damage
         if (event.getDamager() instanceof Player player && ArmourChecking.hasFullUpgradedArmor(player, TrimPattern.SILENCE, upgradeKey)) {
-            // Only add rage if it hasn't been applied for the other player
-            if (!rageGainApplied) {
-                addRage(player, SilenceUltData.RAGE_PER_HIT_DEALT);
-            }
+            addRage(player, data.RAGE_PER_HIT_DEALT);
         }
     }
 
@@ -105,7 +95,7 @@ public class SilenceUlt implements Listener {
         switch (newSlot) {
             case 0 -> {
                 double currentRage = data.rage.getOrDefault(player.getUniqueId(), 0.0);
-                if (currentRage >= SilenceUltData.MAX_RAGE && !isWarden && !data.transformingPlayers.contains(player.getUniqueId())) {
+                if (currentRage >= data.MAX_RAGE && !isWarden && !data.transformingPlayers.contains(player.getUniqueId())) {
                     animations.startTransformationSequence(player);
                 }
             }
@@ -118,7 +108,7 @@ public class SilenceUlt implements Listener {
     public void addRage(Player player, double amount) {
         if (DisguiseAPI.isDisguised(player) || data.transformingPlayers.contains(player.getUniqueId())) return;
         double currentRage = data.rage.getOrDefault(player.getUniqueId(), 0.0);
-        double newRage = Math.min(SilenceUltData.MAX_RAGE, currentRage + amount);
+        double newRage = Math.min(data.MAX_RAGE, currentRage + amount);
         data.rage.put(player.getUniqueId(), newRage);
     }
 
@@ -129,10 +119,6 @@ public class SilenceUlt implements Listener {
         World world = loc.getWorld();
 
         UUID playerUUID = player.getUniqueId();
-        data.wardenBoomCooldowns.remove(playerUUID);
-        data.deepDarkGraspCooldowns.remove(playerUUID);
-        data.obliteratingLeapCooldowns.remove(playerUUID);
-
         world.playSound(loc, Sound.ENTITY_WARDEN_ROAR, 3.0f, 1.0f);
         world.playSound(loc, Sound.ENTITY_GENERIC_EXPLODE, 2.0f, 0.8f);
         world.spawnParticle(Particle.SONIC_BOOM, loc.clone().add(0, 1, 0), 1);
@@ -158,10 +144,10 @@ public class SilenceUlt implements Listener {
         DisguiseConfig.setNotifyBar(DisguiseConfig.NotifyBar.NONE);
         DisguiseAPI.disguiseToAll(player, wardenDisguise);
 
-        long durationTicks = SilenceUltData.WARDEN_DURATION_SECONDS * 20;
-        player.addPotionEffect(new PotionEffect(PotionEffectType.HEALTH_BOOST, (int) durationTicks, SilenceUltData.WARDEN_HEALTH_BOOST_LEVEL, false, false));
-        player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, (int) durationTicks, SilenceUltData.WARDEN_STRENGTH_LEVEL, false, false));
-        player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, (int) durationTicks, SilenceUltData.WARDEN_RESISTANCE_LEVEL, false, false));
+        long durationTicks = data.WARDEN_DURATION_SECONDS * 20;
+        player.addPotionEffect(new PotionEffect(PotionEffectType.HEALTH_BOOST, (int) durationTicks, data.WARDEN_HEALTH_BOOST_LEVEL, false, false));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, (int) durationTicks, data.WARDEN_STRENGTH_LEVEL, false, false));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, (int) durationTicks, data.WARDEN_RESISTANCE_LEVEL, false, false));
         startWardenTimer(player);
     }
 
@@ -170,12 +156,6 @@ public class SilenceUlt implements Listener {
         if (sendMessage) {
             player.sendMessage(ChatColor.GRAY + "The Warden's power recedes...");
         }
-
-        UUID playerUUID = player.getUniqueId();
-        data.wardenBoomCooldowns.remove(playerUUID);
-        data.deepDarkGraspCooldowns.remove(playerUUID);
-        data.obliteratingLeapCooldowns.remove(playerUUID);
-
         if (DisguiseAPI.isDisguised(player)) DisguiseAPI.undisguiseToAll(player);
         player.removePotionEffect(PotionEffectType.STRENGTH);
         player.removePotionEffect(PotionEffectType.RESISTANCE);
@@ -184,7 +164,7 @@ public class SilenceUlt implements Listener {
 
     public void startWardenTimer(Player player) {
         UUID playerUUID = player.getUniqueId();
-        long transformEndTime = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(SilenceUltData.WARDEN_DURATION_SECONDS);
+        long transformEndTime = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(data.WARDEN_DURATION_SECONDS);
         data.wardenEndTimes.put(playerUUID, transformEndTime);
 
         BukkitTask task = new BukkitRunnable() {
@@ -195,7 +175,8 @@ public class SilenceUlt implements Listener {
                     this.cancel();
                     return;
                 }
-                if (System.currentTimeMillis() > transformEndTime) {
+                long endTime = data.wardenEndTimes.getOrDefault(playerUUID, 0L);
+                if (System.currentTimeMillis() > endTime) {
                     revertFromWarden(player, true);
                     this.cancel();
                 }
@@ -214,17 +195,17 @@ public class SilenceUlt implements Listener {
             long durationLeft = wardenEndTime - now;
 
             String durationStr = ChatColor.DARK_PURPLE + "Warden: " + ChatColor.LIGHT_PURPLE + (durationLeft > 0 ? (durationLeft / 1000 + 1) + "s" : "Ended");
-            String boomStr = getCooldownString("A1", SilenceUltData.BOOM_COOLDOWN_SECONDS, data.wardenBoomCooldowns.get(playerUUID), now);
-            String graspStr = getCooldownString("A2", SilenceUltData.GRASP_COOLDOWN_SECONDS, data.deepDarkGraspCooldowns.get(playerUUID), now);
-            String leapStr = getCooldownString("A3", SilenceUltData.LEAP_COOLDOWN_SECONDS, data.obliteratingLeapCooldowns.get(playerUUID), now);
+            String boomStr = getCooldownString("A1", data.BOOM_COOLDOWN_SECONDS, data.wardenBoomCooldowns.get(playerUUID), now);
+            String graspStr = getCooldownString("A2", data.GRASP_COOLDOWN_SECONDS, data.deepDarkGraspCooldowns.get(playerUUID), now);
+            String leapStr = getCooldownString("A3", data.LEAP_COOLDOWN_SECONDS, data.obliteratingLeapCooldowns.get(playerUUID), now);
 
             return durationStr + ChatColor.DARK_GRAY + " | " + boomStr + ChatColor.DARK_GRAY + " | " + graspStr + ChatColor.DARK_GRAY + " | " + leapStr;
         } else if (ArmourChecking.hasFullUpgradedArmor(player, TrimPattern.SILENCE, upgradeKey)) {
             double currentRage = data.rage.getOrDefault(playerUUID, 0.0);
-            if (currentRage >= SilenceUltData.MAX_RAGE) {
+            if (currentRage >= data.MAX_RAGE) {
                 return ChatColor.RED + "" + ChatColor.BOLD + "ULTIMATE READY";
             } else {
-                int ragePercent = (int) ((currentRage / SilenceUltData.MAX_RAGE) * 100);
+                int ragePercent = (int) ((currentRage / data.MAX_RAGE) * 100);
                 return ChatColor.DARK_AQUA + "Rage: " + ChatColor.AQUA + ragePercent + "%";
             }
         }
@@ -246,6 +227,12 @@ public class SilenceUlt implements Listener {
 
     public void cleanupPlayer(UUID playerUUID) {
         animations.revertSculkBlocks();
+        data.rage.remove(playerUUID);
+        data.wardenBoomCooldowns.remove(playerUUID);
+        data.deepDarkGraspCooldowns.remove(playerUUID);
+        data.obliteratingLeapCooldowns.remove(playerUUID);
+        data.wardenEndTimes.remove(playerUUID);
+        data.leapingPlayers.remove(playerUUID);
         data.originalBlocks.remove(playerUUID);
         if (data.sculkTasks.containsKey(playerUUID)) data.sculkTasks.remove(playerUUID).cancel();
         if (data.mainAnimationTasks.containsKey(playerUUID)) data.mainAnimationTasks.remove(playerUUID).cancel();
@@ -257,7 +244,9 @@ public class SilenceUlt implements Listener {
         if (data.wardenTimers.containsKey(playerUUID)) {
             data.wardenTimers.remove(playerUUID).cancel();
         }
-        data.wardenEndTimes.remove(playerUUID);
-        data.leapingPlayers.remove(playerUUID);
+    }
+
+    public void revertAllSculkBlocks() {
+        animations.revertSculkBlocks();
     }
 }

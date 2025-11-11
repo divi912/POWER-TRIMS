@@ -51,6 +51,7 @@ public final class LoreChanger implements Listener {
     private static final Material RAISER_TRIM_TEMPLATE = Material.RAISER_ARMOR_TRIM_SMITHING_TEMPLATE;
     private static final Material DUNE_TRIM_TEMPLATE = Material.DUNE_ARMOR_TRIM_SMITHING_TEMPLATE;
     private static final Material SNOUT_TRIM_TEMPLATE = Material.SNOUT_ARMOR_TRIM_SMITHING_TEMPLATE;
+    private static final Material BOLT_TRIM_TEMPLATE = Material.BOLT_ARMOR_TRIM_SMITHING_TEMPLATE;
 
 
     // New Rib Trim Template constant (assumes the material exists in your context)
@@ -349,6 +350,21 @@ public final class LoreChanger implements Listener {
             lore.add(ChatColor.BLUE + "❖ " + ChatColor.GOLD + "Passive Ability: " + ChatColor.BOLD + "Flowing Agility" + ChatColor.BLUE + " ❖");
             lore.add(ChatColor.GRAY + "✦ Grants " + ChatColor.YELLOW + "Speed II" + ChatColor.DARK_GRAY + " while wearing Full Flow Trim Armor");
             lore.add("");
+        } else if (item.getType() == BOLT_TRIM_TEMPLATE) {
+            // Bolt Trim Lore
+            meta.setDisplayName(ChatColor.YELLOW + "༄ Bolt Trim ༄");
+
+            lore.add("");
+            // Primary Ability: Chain Lightning
+            lore.add(ChatColor.YELLOW + "❖ " + ChatColor.GOLD + "Primary Ability: " + ChatColor.BOLD + "Chain Lightning" + ChatColor.YELLOW + " ❖");
+            lore.add(ChatColor.GRAY + "✦ Strike a target with a bolt of lightning");
+            lore.add(ChatColor.GRAY + "✦ The lightning will chain to nearby enemies");
+            lore.add(ChatColor.GOLD + "⏳ Cooldown: " + ChatColor.YELLOW + "20 seconds");
+            lore.add("");
+            // Passive Ability: Speed
+            lore.add(ChatColor.BLUE + "❖ " + ChatColor.GOLD + "Passive Ability: " + ChatColor.BOLD + "Speed" + ChatColor.BLUE + " ❖");
+            lore.add(ChatColor.GRAY + "✦ Grants " + ChatColor.YELLOW + "Speed II" + ChatColor.DARK_GRAY + " while wearing Full Bolt Trim Armor");
+            lore.add("");
         }
 
         meta.setLore(lore);
@@ -372,7 +388,8 @@ public final class LoreChanger implements Listener {
                 material == COAST_TRIM_TEMPLATE ||
                 material == DUNE_TRIM_TEMPLATE ||
                 material == SNOUT_TRIM_TEMPLATE ||
-                material == FLOW_TRIM_TEMPLATE;
+                material == FLOW_TRIM_TEMPLATE ||
+                material == BOLT_TRIM_TEMPLATE;
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
